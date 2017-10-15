@@ -1,0 +1,15 @@
+#dropzone {
+  height: 200px;
+  margin: 0;
+  text-align: center;
+  background-color: #ccc;
+}
+
+#dropzone.dragover {
+  background-color: #BDD4B0;
+}
+
+#dropzone p {
+  padding-top: 85px;
+  color: #666;
+}

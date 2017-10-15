@@ -1,0 +1,51 @@
+<html>
+  <head>
+    <title>Make Polly say things</title>
+    <link rel="stylesheet" type="text/css" href="style.css" />
+
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.12.min.js"></script>
+
+  </head>
+  <body>
+
+    <h1>Image Reader</h1>
+
+    <p>Upload a image containing text and receive an audio file reading the contents.</p>
+
+    <div id="login-buttons">
+      <div id="fb-login">
+      </div>
+    </div>
+
+    <div id="app-container" style="display: none">
+
+      <div id="dropzone">
+        <p>Drop files here</p>
+      </div>
+
+    </div>
+    
+    <div id="fb-root"></div>
+
+    <script src="scripts/app.js"></script>
+    <script src="scripts/fbinit.js"></script>
+
+    <script>
+      // Shows the facebook login button if needed, invokes callback when user is logged in
+      fbInit({fbAppId: '358770994578462'}, function(authResponse) {
+
+        // create AWS credentials with authResponse token
+        var creds = new AWS.WebIdentityCredentials({
+          ProviderId: 'graph.facebook.com',
+          RoleArn: 'arn:aws:iam::808510826174:role/PollinatorFBUploadRole',
+          WebIdentityToken: authResponse.accessToken
+        });
+        var fbUserId = authResponse.userID;
+
+        // then init app with the creds we just created
+        initApp({awsCredentials: creds, userId: 'fb_' + fbUserId});
+      });
+    </script>
+
+  </body>
+</html>
