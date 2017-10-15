@@ -66,6 +66,7 @@ exports.handler = function(request, context, cb) {
             userId: data.userId,
             jobId: jobId,
             created: new Date().valueOf(),
+            status: 'CREATED',
             files: [
                 {
                     bucketName: data.bucketName,

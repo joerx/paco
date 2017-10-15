@@ -53,26 +53,39 @@ const lamdbaHandler = exports.handler = (event, context, cb) => {
         });
 }
 
+/**
+ * Store extracted text in DynamoDB. Also change status to 'TEXT_EXTRACTED'
+ * @param {string} userId userid the job belongs to, acts as partition key
+ * @param {string} jobId job id to update, used as sort key
+ * @param {string} text text to store for the job
+ */
 const updateJobWithText = (userId, jobId, text) => {
     const AWS = require('aws-sdk');
     const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
-    let expression, values, names;
+    const expressions = [
+        '#hasText=:hasText', 
+        '#status=:status'
+    ];
+    const values = {
+        ':hasText': text ? true : false,
+        ':status': 'TEXT_EXTRACTED'
+    }
+    const names = {
+        '#hasText': 'hasText',
+        '#status': 'status'
+    }
 
     if (text) {
-        expression = 'set #text = :text, #hasText = :hasText';
-        values = {':text': text, ':hasText': true};
-        names = {'#text': 'text', '#hasText': 'hasText'};
-    } else {
-        expression = 'set #hasText = :hasText';
-        values = {':hasText': false};
-        names = {'#hasText': 'hasText'};
+        expressions.push('#text=:text');
+        values[':text'] = text;
+        names['#text'] = 'text';
     }
 
     const params = {
         TableName: process.env.TABLE_NAME,
         Key: {userId, jobId},
-        UpdateExpression: expression,
+        UpdateExpression: 'set '+expressions.join(','),
         ExpressionAttributeNames: names,
         ExpressionAttributeValues: values
     }
@@ -80,11 +93,7 @@ const updateJobWithText = (userId, jobId, text) => {
     return new Promise((resolve, reject) => {
         dynamoDB.update(params, (err, data) => {
             if (err) reject(err);
-            else {
-                console.log('DynamoDB response data:');
-                console.log(data);
-                resolve(text);
-            }
+            else resolve(text);
          });
     });
 }
