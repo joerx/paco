@@ -61,7 +61,7 @@ const doLambda = (request, cb) => {
     }
     if (error) {
         console.warn('Request validation error', error);
-        const response = mkResponse(400, {message: error});
+        const response = mkResponse(400, {error});
         return cb(null, response);
     }
 
