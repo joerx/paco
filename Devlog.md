@@ -167,7 +167,26 @@ Conclusion: can use userId as primary, jobId (timestamp+uniqid) as sort key
 
 - Looks straight forward - use AWS SDK to call Lambda.invoke
 - Permission required: `lambda:InvokeFunction`
-- TODO: invoke PollinatorDetectText from PollinatorCreateJob
+- Policy:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1508053766000",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:InvokeAsync",
+                "lambda:InvokeFunction"
+            ],
+            "Resource": [
+                "arn:aws:lambda:ap-southeast-1:808510826174:function:PollinatorDetectText"
+            ]
+        }
+    ]
+}
+```
 
 ### Pre-Signed URLs
 

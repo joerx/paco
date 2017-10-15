@@ -2,30 +2,41 @@
 
 const AWS = require('aws-sdk');
 const uniqid = require('uniqid');
+const assert = require('assert');
 
 const tableName = process.env.TABLE_NAME;
+const detectorFnName = process.env.TEXT_DETECTION_FN_NAME;
+const detectorFnVersion = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
 
-const mkResponse = function(statusCode, body) {
-    if (typeof arguments[0] === 'object') {
-        statusCode = 200;
-        body = arguments[0];
-    }
+const mkResponse = (statusCode, data) => {
     return {
-        statusCode: statusCode,
+        statusCode,
+        body: JSON.stringify(data)+'\n',
         headers: {
             'Content-type': 'application/json',
             'Access-Control-Allow-Origin': '*'
         },
-        body: JSON.stringify(body)+'\n'
     }
 }
 
-// Lambda handler
-exports.handler = function(request, context, cb) {
+const invokeTextDetection = (event, cb) => {
+    console.log('Invoking lambda '+detectorFnName+':'+detectorFnVersion);
 
-    if (!tableName) {
-        return cb(Error('Missing table name'));
+    const lambda = new AWS.Lambda();
+    const params = {
+        FunctionName: detectorFnName,
+        Qualifier: detectorFnVersion,
+        InvocationType: 'Event',
+        Payload: JSON.stringify(event)
     }
+
+    lambda.invoke(params, cb);
+}
+
+const doLambda = (request, cb) => {
+
+    assert(tableName, 'Missing TABLE_NAME in env');
+    assert(detectorFnName, 'Missing TEXT_DETECTION_FN_NAME in env');
 
     console.log('Raw request:', request.body);
 
@@ -60,22 +71,24 @@ exports.handler = function(request, context, cb) {
 
     console.log('Storing job', jobId);
 
+    const jobData = {
+        userId: data.userId,
+        jobId: jobId,
+        created: new Date().valueOf(),
+        status: 'CREATED',
+        files: [
+            {
+                bucketName: data.bucketName,
+                key: data.key,
+                url: 's3://'+data.bucketName+'/'+data.key,
+                type: data.type
+            }
+        ]
+    }
+
     const params = {
         TableName: tableName,
-        Item: {
-            userId: data.userId,
-            jobId: jobId,
-            created: new Date().valueOf(),
-            status: 'CREATED',
-            files: [
-                {
-                    bucketName: data.bucketName,
-                    key: data.key,
-                    url: 's3://'+data.bucketName+'/'+data.key,
-                    type: data.type
-                }
-            ]
-        }
+        Item: jobData
     }
 
     dynamoDB.put(params, (err, data) => {
@@ -84,12 +97,29 @@ exports.handler = function(request, context, cb) {
             cb(null, mkResponse(500, err.message || err));
         }
         else {
-            const responseData = {
-                message: 'Job accepted',
-                jobId: jobId
-            };
-            console.log('All good');
-            cb(null, mkResponse(201, responseData));
+            invokeTextDetection(jobData, (err) => {
+                if (err) {
+                    console.error('Error invoking text detection', err);
+                    cb(null, mkResponse(500, err.message || err));
+                } else {
+                    const responseData = {
+                        message: 'Job accepted',
+                        jobId: jobId
+                    };
+                    console.log('All good');
+                    cb(null, mkResponse(201, responseData));
+                }
+            });
         }
     });
+}
+
+// Lambda handler
+exports.handler = (request, context, cb) => {
+    try {
+        doLambda(request, cb);
+    } catch(error) {
+        console.error(error);
+        cb(null, mkResponse(500, {error: error.message}));
+    }
 }
