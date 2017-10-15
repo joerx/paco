@@ -43,7 +43,7 @@ const GetJobs = exports.handler = (req, context, cb) => {
     const Limit = 10;
     const TableName = process.env.TABLE_NAME;
     const KeyConditionExpression = 'userId = :userId';
-    const ProjectionExpression = 'jobId,userId,created,#status';
+    const ProjectionExpression = 'jobId,userId,created,#status,hasText';
     const ExpressionAttributeNames = {
         '#status': 'status'
     }

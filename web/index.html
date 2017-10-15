@@ -23,6 +23,32 @@
         <p>Drop files here</p>
       </div>
 
+      <div>
+        <p>
+          <button id="update-joblist">Update</button>
+          <label for="joblist-auto-update">
+            <input type="checkbox" id="joblist-auto-update">
+            Auto-Update
+          </label>
+        </p>
+      </div>
+
+      <div id="joblist-wrapper">
+        <table id="joblist">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Created</th>
+              <th>Status</th>
+              <th class="boolean">Has Text</th>
+            </tr>
+          </thead>
+          <tbody id="joblist-body">
+
+          </tbody>
+        </table>
+      </div>
+
     </div>
     
     <div id="fb-root"></div>

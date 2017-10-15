@@ -1,3 +1,7 @@
+body {
+  font-family: sans-serif;
+}
+
 #dropzone {
   height: 200px;
   margin: 0;
@@ -12,4 +16,27 @@
 #dropzone p {
   padding-top: 85px;
   color: #666;
+}
+
+#joblist {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: -1;
+}
+
+td, th {
+  padding: 2px 4px;
+}
+
+th {
+  text-align: left;
+  font-weight: normal;
+}
+
+td.boolean, th.boolean {
+  text-align: center;
+}
+
+td.number, th.number {
+  text-align: right;
 }
