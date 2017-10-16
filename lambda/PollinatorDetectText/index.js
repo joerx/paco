@@ -1,14 +1,16 @@
 const path = require('path');
 const https = require('https');
 const assert = require('assert');
+const AWS = require('aws-sdk');
 
 const lamdbaHandler = exports.handler = (event, context, cb) => {
 
-    // we only need AWS in lambda, so it's not in node_modules
-    const AWS = require('aws-sdk');
-
     assert(process.env.TABLE_NAME, 'Missing TABLE_NAME in env');
     assert(process.env.GOOGLE_API_KEY, 'Missing GOOGLE_API_KEY in env');
+    assert(process.env.TEXT_TO_SPEECH_FN_NAME, 'Missing TEXT_TO_SPEECH_FN_NAME in env');
+
+    const textToSpeechFnName = process.env.TEXT_TO_SPEECH_FN_NAME;
+    const textToSpeechFnVersion = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
 
     // event looks like this:
     // {
@@ -27,7 +29,6 @@ const lamdbaHandler = exports.handler = (event, context, cb) => {
     // get pre-signed url to send to cloud vision
     const file = event.files[0];
 
-    console.log('Getting pre-signed url for '+file.bucketName+'/'+file.key);
     getObjectAsBase64(file.bucketName, file.key)
         .then(base64data => {
             return detectImageText({content: base64data});
@@ -44,7 +45,12 @@ const lamdbaHandler = exports.handler = (event, context, cb) => {
 
             return updateJobWithText(userId, jobId, text);
         })
-        .then(text => {
+        .then(({userId, jobId, text}) => {
+            const params = {userId, jobId, text};
+            const options = {textToSpeechFnName, textToSpeechFnVersion, params};
+            return invokeTextToSpeech(options, event);
+        })
+        .then(({userId, jobId, text}) => {
             cb(null, {text});
         })
         .catch(error => {
@@ -60,7 +66,6 @@ const lamdbaHandler = exports.handler = (event, context, cb) => {
  * @param {string} text text to store for the job
  */
 const updateJobWithText = (userId, jobId, text) => {
-    const AWS = require('aws-sdk');
     const dynamoDB = new AWS.DynamoDB.DocumentClient();
 
     const expressions = [
@@ -93,8 +98,8 @@ const updateJobWithText = (userId, jobId, text) => {
     return new Promise((resolve, reject) => {
         dynamoDB.update(params, (err, data) => {
             if (err) reject(err);
-            else resolve(text);
-         });
+            else resolve({userId, jobId, text});
+        });
     });
 }
 
@@ -105,7 +110,6 @@ const updateJobWithText = (userId, jobId, text) => {
  * @param {string} Key key of the object inside the bucket
  */
 const getPresignedUrl = (Bucket, Key) => {
-    const AWS = require('aws-sdk');
     const s3 = new AWS.S3();
     const params = {Bucket, Key};
     const operation = 'getObject';
@@ -125,7 +129,6 @@ const getPresignedUrl = (Bucket, Key) => {
  * @param {string} Key 
  */
 const getObjectAsBase64 = (Bucket, Key) => {
-    const AWS = require('aws-sdk');
     const s3 = new AWS.S3();
     const params = {Bucket, Key};
 
@@ -163,7 +166,7 @@ const httpPost = (hostname, path, body) => {
                 body += chunk
             });
             res.on('end', _ => {
-                console.log('RESPONSE BODY', body);
+                // console.log('RESPONSE BODY', body);
                 resolve(JSON.parse(body));
             });
         });
@@ -223,39 +226,24 @@ const detectImageText = (options) => {
         .then((body) => body.responses[0]);
 }
 
-/**
- * Print usage for CLI mode
- */
-const cliUsage = () => {
-    console.log('node '+path.basename(process.argv[1])+' IMAGE_URI');
-    process.exit(1);
-}
+const invokeTextToSpeech = (options) => {
+    const {textToSpeechFnName, textToSpeechFnVersion, params} = options;
 
-/**
- * Handle error in CLI mode - print error to console.error and exit with non-zero exit code
- * @param {Error} err 
- */
-const cliHandleError = (err) => {
-    console.error(err);
-    process.exit(1);
-}
+    console.log('Invoking '+textToSpeechFnName+':'+textToSpeechFnVersion);
+    console.log('Params:', params);
 
-/**
- * Detect text on image given by URI, output the result.
- * @param {string} imageUri 
- */
-const cliDetectImage = (imageUri) => {
-    detectImageText(imageUri)
-        .then(response => {
-            if (!response.fullTextAnnotation) console.log('No text detected');
-            else console.log(response.fullTextAnnotation.text);
-        })
-        .catch(cliHandleError);
-}
+    const lambda = new AWS.Lambda();
+    const invocationParams = {
+        FunctionName: textToSpeechFnName,
+        Qualifier: textToSpeechFnVersion,
+        InvocationType: 'Event',
+        Payload: JSON.stringify(params)
+    }
 
-// If called on CLI, just process the  given image
-if (require.main === module) {
-    const imageUri = process.argv[2];
-    if (!imageUri) return cliUsage();
-    else cliDetectImage(imageUri);
+    return new Promise((resolve, reject) => {
+        lambda.invoke(invocationParams, (err) => {
+            if (err) reject(err);
+            else resolve(params);
+        });
+    });
 }

@@ -239,3 +239,22 @@ SNS:
 
 - SNS topics can act as middleware, avoid coupling
 - Lambda can subscribe to SNS directly, no polling needed
+
+## Job Status Tracking
+
+- Simple Lambda API to return the 10 latest jobs and their status
+- Use Polling from frontend to update job list (no WebSocket support yet)
+- Problem: no authorization, userId just passed in querystring
+- Same problem CreateJob endpoint
+
+### Options for Authorization
+
+1. Skip API Gateway, just invoke Lambda from Web UI using WebIdentity credentials
+1. Other options? - TBD
+
+## Speech Synthesis
+
+- Another Lambda, called from the TextExtraction step directly
+- Role: `PollinatorTextToSpeech`, policies for access to DynamoDB, S3 upload and Amazon Polly
+- Additional permission in ExtractText to invoke TextToSpeech
+- Polly n/a in ap-southeast-1, but can use different region as needed
