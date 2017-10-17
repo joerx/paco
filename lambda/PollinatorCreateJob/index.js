@@ -5,6 +5,7 @@ const uniqid = require('uniqid');
 const assert = require('assert');
 
 const tableName = process.env.TABLE_NAME;
+const bucketName = process.env.BUCKET_NAME;
 const detectorFnName = process.env.TEXT_DETECTION_FN_NAME;
 const detectorFnVersion = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
 
@@ -33,36 +34,26 @@ const invokeTextDetection = (event, cb) => {
     lambda.invoke(params, cb);
 }
 
-const doLambda = (request, cb) => {
+const validate = (data) => {
+    assert(data.key, 'key is missing');
+    assert(data.type, 'type is missing');
+    assert(data.userId, 'userId is missing');
+}
 
-    assert(tableName, 'Missing TABLE_NAME in env');
-    assert(detectorFnName, 'Missing TEXT_DETECTION_FN_NAME in env');
-
-    console.log('Raw request:', request.body);
+exports.handler = (request, context, cb) => {
+    assert(bucketName, 'BUCKET_NAME is required');
+    assert(tableName, 'TABLE_NAME is required');
+    assert(detectorFnName, 'TEXT_DETECTION_FN_NAME is required');
 
     const data = JSON.parse(request.body);
-
-    console.log('Parsed request:', data);
+    console.log('Request data:', data);
 
     // validate request
-    let error = null;
-
-    if (!data.bucketName) {
-        error = 'bucketName is missing';
-    }
-    if (!data.key) {
-        error = 'key is missing';
-    }
-    if (!data.type) {
-        error = 'type is missing';
-    }
-    if (!data.userId) {
-        error = 'userId is missing';
-    }
-    if (error) {
-        console.warn('Request validation error', error);
-        const response = mkResponse(400, {error});
-        return cb(null, response);
+    try {
+        validate(data);
+    } catch(error) {
+        const res = mkResponse(400, {error: error.message});
+        cb(null, res);
     }
 
     // store job in DynamoDB
@@ -78,9 +69,7 @@ const doLambda = (request, cb) => {
         status: 'CREATED',
         files: [
             {
-                bucketName: data.bucketName,
                 key: data.key,
-                url: 's3://'+data.bucketName+'/'+data.key,
                 type: data.type
             }
         ]
@@ -96,30 +85,15 @@ const doLambda = (request, cb) => {
             console.error('Error from DynamoDB', err);
             cb(null, mkResponse(500, err.message || err));
         }
-        else {
-            invokeTextDetection(jobData, (err) => {
-                if (err) {
-                    console.error('Error invoking text detection', err);
-                    cb(null, mkResponse(500, err.message || err));
-                } else {
-                    const responseData = {
-                        message: 'Job accepted',
-                        jobId: jobId
-                    };
-                    console.log('All good');
-                    cb(null, mkResponse(201, responseData));
-                }
-            });
-        }
+        else invokeTextDetection(jobData, (err) => {
+            if (err) cb(null, mkResponse(500, err.message || err));
+            else {
+                const responseData = {
+                    message: 'Job accepted',
+                    jobId: jobId
+                };
+                cb(null, mkResponse(201, responseData));
+            }
+        });
     });
-}
-
-// Lambda handler
-exports.handler = (request, context, cb) => {
-    try {
-        doLambda(request, cb);
-    } catch(error) {
-        console.error(error);
-        cb(null, mkResponse(500, {error: error.message}));
-    }
 }

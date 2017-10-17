@@ -5,12 +5,14 @@ const AWS = require('aws-sdk');
 
 const lamdbaHandler = exports.handler = (event, context, cb) => {
 
-    assert(process.env.TABLE_NAME, 'Missing TABLE_NAME in env');
-    assert(process.env.GOOGLE_API_KEY, 'Missing GOOGLE_API_KEY in env');
-    assert(process.env.TEXT_TO_SPEECH_FN_NAME, 'Missing TEXT_TO_SPEECH_FN_NAME in env');
+    assert(process.env.TABLE_NAME, 'TABLE_NAME is required');
+    assert(process.env.GOOGLE_API_KEY, 'GOOGLE_API_KEY is required');
+    assert(process.env.TEXT_TO_SPEECH_FN_NAME, 'TEXT_TO_SPEECH_FN_NAME is required');
+    assert(process.env.BUCKET_NAME, 'BUCKET_NAME is required');
 
     const textToSpeechFnName = process.env.TEXT_TO_SPEECH_FN_NAME;
     const textToSpeechFnVersion = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
+    const bucketName = process.env.BUCKET_NAME;
 
     // event looks like this:
     // {
@@ -29,7 +31,7 @@ const lamdbaHandler = exports.handler = (event, context, cb) => {
     // get pre-signed url to send to cloud vision
     const file = event.files[0];
 
-    getObjectAsBase64(file.bucketName, file.key)
+    getObjectAsBase64(bucketName, file.key)
         .then(base64data => {
             return detectImageText({content: base64data});
         })

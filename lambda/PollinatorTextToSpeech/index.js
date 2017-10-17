@@ -1,6 +1,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const assert = require('assert');
 
 const TextToSpeech = exports.handler = (event, context, cb) => {
     // Event structure
@@ -10,16 +11,27 @@ const TextToSpeech = exports.handler = (event, context, cb) => {
     //   text: "bla"
     // }
     console.log(event);
+
+    assert(process.env.TABLE_NAME, 'TABLE_NAME is missing');
+    assert(process.env.BUCKET_NAME, 'BUCKET_NAME is missing');
+
+    const tableName = process.env.TABLE_NAME;
+    const bucketName = process.env.BUCKET_NAME;
+    const region = process.env.REGION || 'ap-northeast-1';
     
     const {text, jobId, userId} = event;
 
-    synthesizeSpeech(text)
+    synthesizeSpeech(text, region)
         .then(({data, type}) => {
             const key = userId+'/audio_'+jobId+'.mp3';
-            return uploadToS3({key, type, data})
+            return uploadToS3({key, type, data, bucketName})
         })
-        .then(s3Info => {
-            cb(null, s3Info);
+        .then(({bucketName, key, type}) => {
+            const params = {tableName, bucketName, key, type, userId, jobId};
+            return updateDynamoDB(params);
+        })
+        .then(info => {
+            cb(null, info);
         })
         .catch(error => {
             console.error(error);
@@ -28,9 +40,7 @@ const TextToSpeech = exports.handler = (event, context, cb) => {
 }
 
 
-const uploadToS3 = ({key, data, type}) => {
-    // FIXME: get from request (or pass as env across all functions)
-    const bucketName = 'pollinator-uploads';
+const uploadToS3 = ({bucketName, key, data, type}) => {
     const bucket = new AWS.S3({
         params: {
             Bucket: bucketName
@@ -50,14 +60,13 @@ const uploadToS3 = ({key, data, type}) => {
                 console.log('Upload successful');
                 console.log(response);
                 const url = 's3://'+bucketName+'/'+key;
-                resolve({bucketName, key, url});
+                resolve({bucketName, key, url, type});
             }
         })
     });
 }
 
-const synthesizeSpeech = (text) => {
-    const region = process.env.REGION || 'ap-northeast-1';
+const synthesizeSpeech = (text, region) => {
     const polly = new AWS.Polly({region});
 
     const params = {
@@ -66,12 +75,44 @@ const synthesizeSpeech = (text) => {
         Text: text,
         TextType: 'text',
         VoiceId: 'Joanna'
-    }
+    };
 
     return new Promise((resolve, reject) => {
         polly.synthesizeSpeech(params, function(err, data) {
             if (err) reject(err);
             else resolve({data: data.AudioStream, type: data.ContentType});
+        });
+    });
+}
+
+
+const updateDynamoDB = ({tableName, bucketName, key, type, userId, jobId}) => {
+    const dynamoDB = new AWS.DynamoDB.DocumentClient();
+
+    const outputs = [{
+        type,
+        bucketName,
+        key
+    }];
+
+    const params = {
+        TableName: tableName,
+        Key: {userId, jobId},
+        UpdateExpression: 'set #outputs = :outputs, #status = :status',
+        ExpressionAttributeNames: {
+            '#outputs': 'outputs',
+            '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+            ':outputs': outputs, 
+            ':status': 'SPEECH_GENERATED'
+        }
+    };
+
+    return new Promise((resolve, reject) => {
+        dynamoDB.update(params, (err, data) => {
+            if (err) reject(err);
+            else resolve({userId, jobId, bucketName, key});
         });
     });
 }

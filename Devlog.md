@@ -7,11 +7,12 @@
 
 ## TODO
 
-- Use BUCKET_NAME as env var across the board
 - Generate signed URL for upload per backend function (removes dependency on S3 SDK)
 - Generate signed URLs for download per backend function
 - Visual feedback for image upload in frontend
 - Don't generate speech if no text was found in image
+- Decouple functions, avoid direct invocations (using SNS?)
+- ~~Use BUCKET_NAME as env var across the board~~
 
 ## Drag & Drop File Upload
 

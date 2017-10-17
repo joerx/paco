@@ -4,7 +4,11 @@
     var createJobUrl = baseUrl+'/dev';
     var getJobsUrl = baseUrl+'/dev/jobs';
 
-    var allowedTypes = ['image/png', 'image/jpeg'];
+    var allowedTypes = {
+        'image/png': 'png', 
+        'image/jpeg': 'jpg'
+    };
+
     var bucketName = 'pollinator-uploads';
     var region = 'ap-southeast-1';
 
@@ -41,7 +45,7 @@
         
         // init drop event handling
         initDropzone(dropzone, function(file) {
-            createPollinatorJob(file, options);
+            createJob(file, options);
         });
 
         // update job list
@@ -64,11 +68,14 @@
         appContainer.style.display = 'block';
     }
 
-    function createPollinatorJob(file, options) {
+    function createJob(file, options) {
 
         AWS.config.region = region;
+
+        console.log(file);
         
-        var key = options.userId+'/'+uniqid();
+        var suffix = allowedTypes[file.type];
+        var key = options.userId+'/'+uniqid()+'.'+suffix;
         var bucket = new AWS.S3({
             params: {
                 Bucket: bucketName
@@ -93,7 +100,6 @@
                 var jobParams = {
                     userId: options.userId,
                     type: file.type,
-                    bucketName,
                     key
                 };
                 console.log('Registering job');
@@ -126,7 +132,7 @@
 
             // ensure we really got an image here
             var file = e.dataTransfer.files[0];
-            if (allowedTypes.indexOf(file.type) < 0) {
+            if (!allowedTypes[file.type]) {
                 console.error('I can\'t let you do that dave!');
                 return;
             }
@@ -171,7 +177,6 @@
                 return response.json();
             })
             .then(function(data) {
-                console.log(data.items);
                 return data.items;
             })
             .catch(function(error) {
@@ -207,7 +212,7 @@
         var text = "";
         var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
       
-        for (var i = 0; i < 7; i++)
+        for (var i = 0; i < 20; i++)
           text += possible.charAt(Math.floor(Math.random() * possible.length));
       
         return text;
