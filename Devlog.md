@@ -5,6 +5,14 @@
 - Do this completely serverless using S3 and Lambda
 - Write a terraform plan to roll out the application
 
+## TODO
+
+- Use BUCKET_NAME as env var across the board
+- Generate signed URL for upload per backend function (removes dependency on S3 SDK)
+- Generate signed URLs for download per backend function
+- Visual feedback for image upload in frontend
+- Don't generate speech if no text was found in image
+
 ## Drag & Drop File Upload
 
 - Make sure `ondragover` and `ondragenter` events are cancelled (`e.preventDefault`)
