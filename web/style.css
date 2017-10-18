@@ -37,6 +37,10 @@ td.boolean, th.boolean {
   text-align: center;
 }
 
+td.job-output, th.job-output {
+  text-align: center;
+}
+
 td.number, th.number {
   text-align: right;
 }

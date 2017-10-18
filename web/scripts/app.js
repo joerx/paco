@@ -185,22 +185,32 @@
     }
 
     function updateJobList(userId, tbody) {
-        console.log('update joblist');
-        getJobs(userId).then(function(jobs) {
-            var body = jobs.map(function(job) {
-                if (typeof job.hasText == 'undefined' || job.hasText == null) {
-                    hasText = '';
-                } else {
-                    hasText = job.hasText ? 'yes' : 'no';
-                }
-                return '<tr>'+
+        getJobs(userId)
+            .then(function(jobs) {
+                tbody.innerHTML = jobs.map(function(job) {
+                    var hasText = false, outputLink = '';
+
+                    if (typeof job.hasText == 'undefined' || job.hasText == null) {
+                        hasText = '';
+                    } else {
+                        hasText = job.hasText ? 'yes' : 'no';
+                    }
+                    if (typeof job.output != 'undefined' && job.output != null) {
+                        // outputLink = '<a href="'+job.output.url+'">'+job.output.type+'</a>';
+                        outputLink = 
+                            '<audio src="'+job.output.url+'" controls="controls">'+
+                            '<a href="'+job.output.url+'">'+job.output.type+'</a>'+
+                            '</audio>'
+                    }
+
+                    return '<tr>'+
                         '<td>'+job.jobId+'</td>'+
                         '<td>'+new Date(job.created).toLocaleString()+'</td>'+
                         '<td>'+job.status+'</td>'+
                         '<td class="boolean">'+hasText+'</td>'+
-                        '</tr>';
-            }).join('\n');
-            tbody.innerHTML = body;
+                        '<td class="job-output">'+outputLink+'</td>'+
+                        '</tr>\n';
+                }).join('');
         });
     }
 
