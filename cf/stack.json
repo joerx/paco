@@ -1,0 +1,32 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Serverless app consisting of multiple Lambda functions, a DynamoDB table and a statically hosted website",
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "MyProject",
+            "AllowedPattern": "[A-Z]{1}[A-Za-z0-9]*",
+            "ConstraintDescription": "Must start with an uppercase character and contain only letters and numbers"
+        }
+    },
+    "Resources": {
+        "UploadBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "ProjectName",
+                        "Value": {"Ref": "ProjectName"}
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "BucketDomainName": {
+            "Value": {
+                "Fn::GetAtt": ["UploadBucket", "DomainName"]
+            }
+        }
+    }
+}
