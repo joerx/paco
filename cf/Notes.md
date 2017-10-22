@@ -2,11 +2,29 @@
 
 ## TODO
 
+MVP: Job creation and status query (disable text detection for now). Using local backend.
+
 - ~~S3 bucket for uploads~~
-- Parameters for project name, used as prefix (or use stack name)
-- IAM policy for uploads
-- IAM role with WebIdentity for uploads
-- Lambda for job registration
+- ~~Parameter for project name, used in tags~~
+- ~~IAM policy for uploads~~
+- ~~IAM role with WebIdentity for uploads~~
+- ~~DynamoDB table for job storage~~
+- ~~Managed IAM roles for logstream, dynamodb~~
+- ~~Lambda for job registration~~
+- Lambda for job status update
+- API Gateway endpoints, lambda proxy, CORS policy
+
+Complete the flow:
+
+- ~~Lambda for text detection~~
+- ~~IAM permissions for jobcreate invoke text detection~~
+- Lambda for speech synthesis
+- IAM permissions for textdetect invoke speech synth
+
+Website hosting:
+
+- S3 website hosting
+- Template substitution (FB App ID) in static HTML/JS files
 
 ## CLI
 
@@ -23,10 +41,23 @@
     ```
 
 - Specify parameter values, use `--parameter-overrides`
+- Needed only when new params are introduced, later updates will use previous values
 
     ```sh
     # yikes!
     aws cloudformation deploy --stack-name $STACK_NAME --template-file stack.json --parameter-overrides ProjectName=ServerlessDemo
+    ```
+
+- Additional capabilities, needed to create IAM things, use `--capabilities` flag:
+
+    ```sh
+    aws cloudformation deploy --stack-name $STACK_NAME --template-file stack.json --capabilities CAPABILITY_IAM
+    ```
+
+- Package stack - uploads Lambda code to S3 and generates new template for deployment
+
+    ```sh
+    aws cloudformation package --template-file stack.json --s3-bucket serverless-demo-code --use-json > stack.deploy.json
     ```
 
 - Delete stack:
