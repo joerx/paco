@@ -341,6 +341,59 @@
         "Timeout": "300"
       }
     },
+    "GetJobsFnRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {"Ref": "LogStreamPolicy"},
+          {"Ref": "JobTablePolicy"},
+          {"Ref": "BucketGetObjectPolicy"}
+        ]
+      }
+    },
+    "GetJobsFn": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": "../lambda/PollinatorGetJobs",
+        "Environment": {
+          "Variables": {
+            "BUCKET_NAME": {"Ref": "UploadBucket"},
+            "TABLE_NAME": {"Ref": "JobStatusTable"}
+          }
+        },
+        "Handler": "index.handler",
+        "Role": {"Fn::GetAtt": ["GetJobsFnRole", "Arn"]},
+        "Runtime": "nodejs6.10",
+        "Tags": [
+          {
+            "Key": "ProjectName",
+            "Value": {"Ref": "ProjectName"}
+          }
+        ],
+        "Timeout": "300"
+      }
+    },
+    "InvokeGetJobsPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Fn::GetAtt": ["GetJobsFn", "Arn"]},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {"Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${JobApi}/*"}
+      }
+    },
     "ApiGatewayLogsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -420,6 +473,28 @@
                   "passthroughBehavior": "when_no_match",
                   "type": "mock"
                 }
+              },
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "200 response",
+                    "schema": {
+                      "$ref": "#/definitions/Empty"
+                    }
+                  }
+                },
+                "x-amazon-apigateway-integration": {
+                  "responses": {
+                    "default": {
+                      "statusCode": "200"
+                    }
+                  },
+                  "uri": {"Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetJobsFn.Arn}/invocations"},
+                  "passthroughBehavior": "when_no_match",
+                  "httpMethod": "POST",
+                  "contentHandling": "CONVERT_TO_TEXT",
+                  "type": "aws_proxy"
+                }
               }
             }
           },
@@ -432,27 +507,24 @@
         }
       }
     },
-    "JobApiStage": {
+    "JobApiDeployment": {
       "DependsOn": [
         "ApiGatewayAccount"
       ],
-      "Type": "AWS::ApiGateway::Stage",
-      "Properties": {
-        "DeploymentId": {"Ref": "JobApiDeployment"},
-        "MethodSettings": [{
-          "DataTraceEnabled": true,
-          "HttpMethod": "*",
-          "LoggingLevel": "INFO",
-          "ResourcePath": "/*"
-        }],
-        "RestApiId": {"Ref": "JobApi"},
-        "StageName": {"Ref": "ProjectStage"}
-      }
-    },
-    "JobApiDeployment": {
       "Type": "AWS::ApiGateway::Deployment",
       "Properties": {
-        "RestApiId": {"Ref": "JobApi"}
+        "RestApiId": {"Ref": "JobApi"},
+        "StageName": {"Ref": "ProjectStage"},
+        "StageDescription": {
+          "MethodSettings": [
+            {
+              "DataTraceEnabled": true,
+              "HttpMethod": "*",
+              "LoggingLevel": "INFO",
+              "ResourcePath": "/*"
+            }
+          ]
+        }
       }
     }
   },
