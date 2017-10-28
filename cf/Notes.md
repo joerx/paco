@@ -11,8 +11,8 @@ MVP: Job creation and status query (disable text detection for now). Using local
 - ~~DynamoDB table for job storage~~
 - ~~Managed IAM roles for logstream, dynamodb~~
 - ~~Lambda for job registration~~
-- Lambda for job status update
-- API Gateway endpoints, lambda proxy, CORS policy
+- ~~Lambda for job status update~~
+- ~~API Gateway endpoints, lambda proxy, CORS policy~~
 
 Complete the flow:
 

@@ -13,21 +13,27 @@ install: cfn-package cfn-deploy cfn-outputs
 destroy: cfn-destroy
 show-events: cfn-events
 
+# TODO:
+# - install node_modules for each lambda before cfn-package
+# - build static website (sub-make?)
+# - publish web assets into s3 bucket
+
 cfn-init:
 	aws s3 mb s3://$(code_bucket_name)
 
 cfn-package:
+	mkdir -p out/
 	aws cloudformation package \
-		--template-file stack.json \
+		--template-file cf/stack.json \
 		--s3-bucket $(code_bucket_name) \
 		--use-json \
 		--output-template-file \
-		stack.deploy.json
+		out/stack.deploy.json
 
 cfn-deploy:
 	aws cloudformation deploy \
 		--stack-name $(stack_name) \
-		--template-file stack.deploy.json \
+		--template-file out/stack.deploy.json \
 		--capabilities CAPABILITY_IAM \
 		--parameter-overrides $(cfn_params)
 

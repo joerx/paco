@@ -253,7 +253,7 @@
     "CreateJobFn": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Code": "../lambda/PollinatorCreateJob",
+        "Code": "../lambda/CreateJob",
         "Environment": {
           "Variables": {
             "BUCKET_NAME": {"Ref": "UploadBucket"},
@@ -320,7 +320,7 @@
     "DetectTextFn": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Code": "../lambda/PollinatorDetectText",
+        "Code": "../lambda/DetectText",
         "Environment": {
           "Variables": {
             "BUCKET_NAME": {"Ref": "UploadBucket"},
@@ -366,7 +366,7 @@
     "GetJobsFn": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Code": "../lambda/PollinatorGetJobs",
+        "Code": "../lambda/GetJobs",
         "Environment": {
           "Variables": {
             "BUCKET_NAME": {"Ref": "UploadBucket"},
