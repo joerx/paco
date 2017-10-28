@@ -1,19 +1,25 @@
-version=$(shell date +%s)
+# version=$(shell date +%s)
+version=0.5.0-beta
 stack_name=$(PROJECT_NAME)
+code_bucket_name=$(stack_name)-code
 cfn_params=FacebookAppId=$(FBAPPID) \
 	ProjectName=$(PROJECT_NAME) \
 	ProjectVersion=$(version) \
 	ProjectStage=dev \
 	GoogleAPIKey=$(GOOGLE_API_KEY)
 
+init: cfn-init
 install: cfn-package cfn-deploy cfn-outputs
 destroy: cfn-destroy
 show-events: cfn-events
 
+cfn-init:
+	aws s3 mb s3://$(code_bucket_name)
+
 cfn-package:
 	aws cloudformation package \
 		--template-file stack.json \
-		--s3-bucket serverless-demo-code \
+		--s3-bucket $(code_bucket_name) \
 		--use-json \
 		--output-template-file \
 		stack.deploy.json

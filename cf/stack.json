@@ -394,6 +394,15 @@
         "SourceArn": {"Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${JobApi}/*"}
       }
     },
+    "InvokeCreateJobPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Fn::GetAtt": ["CreateJobFn", "Arn"]},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {"Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${JobApi}/*"}
+      }
+    },
     "ApiGatewayLogsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -480,6 +489,11 @@
                     "description": "200 response",
                     "schema": {
                       "$ref": "#/definitions/Empty"
+                    },
+                    "headers": {
+                      "Access-Control-Allow-Origin": {
+                        "type": "string"
+                      }
                     }
                   }
                 },
@@ -490,6 +504,36 @@
                     }
                   },
                   "uri": {"Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetJobsFn.Arn}/invocations"},
+                  "passthroughBehavior": "when_no_match",
+                  "httpMethod": "POST",
+                  "contentHandling": "CONVERT_TO_TEXT",
+                  "type": "aws_proxy"
+                }
+              },
+              "post": {
+                "produces": [
+                  "application/json"
+                ],
+                "responses": {
+                  "200": {
+                    "description": "200 response",
+                    "schema": {
+                      "$ref": "#/definitions/Empty"
+                    },
+                    "headers": {
+                      "Access-Control-Allow-Origin": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "x-amazon-apigateway-integration": {
+                  "responses": {
+                    "default": {
+                      "statusCode": "200"
+                    }
+                  },
+                  "uri": {"Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateJobFn.Arn}/invocations"},
                   "passthroughBehavior": "when_no_match",
                   "httpMethod": "POST",
                   "contentHandling": "CONVERT_TO_TEXT",

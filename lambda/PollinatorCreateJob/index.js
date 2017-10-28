@@ -34,26 +34,37 @@ const invokeTextDetection = (event, cb) => {
     lambda.invoke(params, cb);
 }
 
-const validate = (data) => {
-    assert(data.key, 'key is missing');
-    assert(data.type, 'type is missing');
-    assert(data.userId, 'userId is missing');
+const parseRequest = (request) => {
+    const data = JSON.parse(request.body);
+    let err = null;
+
+    if (!data) {
+        err = 'No request body received';
+    }
+    else if (!data.key) {
+        err = 'Object key is missing';
+    }
+    else if (!data.type) {
+        err = 'Object type is missing';
+    }
+    else if (!data.userId) {
+        err = 'User id is missing';
+    }
+
+    if (err) return [err, null];
+    else return [null, data];
 }
 
 exports.handler = (request, context, cb) => {
+
     assert(bucketName, 'BUCKET_NAME is required');
     assert(tableName, 'TABLE_NAME is required');
     assert(detectorFnName, 'TEXT_DETECTION_FN_NAME is required');
 
-    const data = JSON.parse(request.body);
-    console.log('Request data:', data);
-
-    // validate request
-    try {
-        validate(data);
-    } catch(error) {
-        const res = mkResponse(400, {error: error.message});
-        cb(null, res);
+    const [error, data] = parseRequest(request);
+    if (error) {
+        cb(null, mkResponse(400, {error}));
+        return;
     }
 
     // store job in DynamoDB
