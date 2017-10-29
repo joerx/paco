@@ -240,11 +240,11 @@ Step functions:
 
 SQS:
 
-- again, avoids tight coupling between lamdbas
-- needs a polling lambda, cloudwatch, "empty" executions
+- Again, avoids tight coupling between Lamdbas
+- Needs a polling lambda, cloudwatch, "empty" executions
 - SQS is for buffering load, where's the point when Lamdba scales on demand?
 
-SNS:
+SNS with subscribed Lambdas:
 
 - SNS topics can act as middleware, avoid coupling
 - Lambda can subscribe to SNS directly, no polling needed
@@ -267,3 +267,11 @@ SNS:
 - Role: `PollinatorTextToSpeech`, policies for access to DynamoDB, S3 upload and Amazon Polly
 - Additional permission in ExtractText to invoke TextToSpeech
 - Polly n/a in ap-southeast-1, but can use different region as needed
+
+## Next Steps
+
+- Use SNS as message bus for coordination
+- Single Lambda as "coordinator", receiving events and calling other Lambdas
+- Another Lambda to update Job status, no DynamoDB access by "Worker" functions
+- Move permissions to invoke functions via SNS into resource policies instead of assigning them to execution roles
+- APIs to process logins & generate signed upload URLs, no dependency on AWS SDK in frontend

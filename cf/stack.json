@@ -91,7 +91,7 @@
     "BucketFbUploadPolicy": {
       "Type": "AWS::IAM::ManagedPolicy",
       "Properties": {
-        "Description": "Allow writing objects into the file upload bucket",
+        "Description": "Allow writing objects into the file upload bucket by Facebook user",
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -118,6 +118,28 @@
                   "s3:prefix": "fb_${graph.facebook.com:id}"
                 }
               }
+            }
+          ]
+        }
+      }
+    },
+    "BucketPutObjectPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "Description": "Allow writing objects into the file upload bucket by system actors",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:PutObjectTagging"
+              ],
+              "Resource": [
+                {"Fn::Join": ["", [{"Fn::GetAtt": ["UploadBucket", "Arn"]}, "/*"]]}
+              ],
+              "Effect": "Allow"
             }
           ]
         }
@@ -313,7 +335,8 @@
         "ManagedPolicyArns": [
           {"Ref": "LogStreamPolicy"},
           {"Ref": "JobTablePolicy"},
-          {"Ref": "BucketGetObjectPolicy"}
+          {"Ref": "BucketGetObjectPolicy"},
+          {"Ref": "InvokeTextToSpeechFnPolicy"}
         ]
       }
     },
@@ -326,7 +349,7 @@
             "BUCKET_NAME": {"Ref": "UploadBucket"},
             "TABLE_NAME": {"Ref": "JobStatusTable"},
             "GOOGLE_API_KEY": {"Ref": "GoogleAPIKey"},
-            "TEXT_TO_SPEECH_FN_NAME": "##TODO"
+            "TEXT_TO_SPEECH_FN_NAME": {"Ref": "TextToSpeechFn"}
           }
         },
         "Handler": "index.handler",
@@ -383,6 +406,94 @@
           }
         ],
         "Timeout": "300"
+      }
+    },
+    "TextToSpeechPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+        "Description": "Allow usage of Amazon Polly API for speech synthesis",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Stmt1508165618000",
+              "Effect": "Allow",
+              "Action": [
+                "polly:DescribeVoices",
+                "polly:SynthesizeSpeech"
+              ],
+              "Resource": [
+                "*"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "TextToSpeechFnRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {"Ref": "LogStreamPolicy"},
+          {"Ref": "JobTablePolicy"},
+          {"Ref": "BucketPutObjectPolicy"},
+          {"Ref": "TextToSpeechPolicy"}
+        ]
+      }
+    },
+    "TextToSpeechFn": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": "../lambda/TextToSpeech",
+        "Environment": {
+          "Variables": {
+            "BUCKET_NAME": {"Ref": "UploadBucket"},
+            "TABLE_NAME": {"Ref": "JobStatusTable"}
+          }
+        },
+        "Handler": "index.handler",
+        "Role": {"Fn::GetAtt": ["TextToSpeechFnRole", "Arn"]},
+        "Runtime": "nodejs6.10",
+        "Tags": [
+          {
+            "Key": "ProjectName",
+            "Value": {"Ref": "ProjectName"}
+          }
+        ],
+        "Timeout": "300"
+      }
+    },
+    "InvokeTextToSpeechFnPolicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Description": "Permission to invoke speech synthesis function",
+      "Properties": {
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "lambda:InvokeAsync",
+                "lambda:InvokeFunction"
+              ],
+              "Resource": [
+                {"Fn::GetAtt": ["TextToSpeechFn", "Arn"]}
+              ]
+            }
+          ]
+        }
       }
     },
     "InvokeGetJobsPermission": {

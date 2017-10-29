@@ -32,4 +32,4 @@ Technologies involved:
 
 ## Further Work
 
-- Use event driven model with coordinator function, don't directly couple functions
+- See [Devlog](Devlog.md)
