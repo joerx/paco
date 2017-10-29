@@ -2,14 +2,18 @@
 version=0.5.0-beta
 stack_name=$(PROJECT_NAME)
 code_bucket_name=$(stack_name)-code
-cfn_params=FacebookAppId=$(FBAPPID) \
+
+cfn_params=\
+	FbAppId=$(FBAPPID) \
 	ProjectName=$(PROJECT_NAME) \
 	ProjectVersion=$(version) \
 	ProjectStage=dev \
 	GoogleAPIKey=$(GOOGLE_API_KEY)
 
+cfn_outputs=$(shell aws cloudformation describe-stacks --stack-name $(stack_name) | jq -r '.Stacks[0].Outputs[]|.OutputKey+"="+.OutputValue')
+
 init: cfn-init
-install: cfn-package cfn-deploy cfn-outputs
+install: cfn-package cfn-deploy
 destroy: cfn-destroy
 show-events: cfn-events
 
@@ -44,4 +48,7 @@ cfn-events:
 	aws cloudformation describe-stack-events --stack-name $(stack_name)
 
 cfn-outputs:
-	aws cloudformation describe-stacks --stack-name $(stack_name) | jq '.Stacks[0].Outputs'
+	@for out in $(cfn_outputs); do echo $$out; done
+
+publish-web:
+	$(MAKE) -C web/ $(cfn_outputs) publish

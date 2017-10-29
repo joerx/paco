@@ -266,6 +266,19 @@ SNS with subscribed Lambdas:
 - There is [AWS SAM](https://aws.amazon.com/about-aws/whats-new/2016/11/introducing-the-aws-serverless-application-model/) - but it seems standard CFN has all this built in
 - Adding a `Makefile` as a simpler wrapper around CFN commands
 
+## Makefile
+
+- Pro: simple format, `make` is available everywhere, conventient wrapper around complex `aws` incantations
+- Con: not exactly the most intuitive format to work with, requires some tricks to work with CFN
+- Caveat: pass JSON-based CFN output as input to other tasks requires at least `jq`
+- Nice to have: a cloud specific `configure` script
+
+Example `Makefile`s working with CloudFormation:
+
+- https://gist.github.com/b3cft/d7cb6676b03f772c8f34798b600b2c28
+- https://gist.github.com/ianblenke/55b740ff19825d621ef4
+- https://github.com/jonmorehouse/cloudformation-playground/blob/master/Makefile
+
 ## Further Work
 
 - This is a POC/exercise project, some tradeoffs to GTD

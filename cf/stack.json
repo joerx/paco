@@ -9,7 +9,7 @@
       "AllowedPattern": "[a-z]{1}[-a-z0-9]*",
       "ConstraintDescription": "Must start with a lowercase character and contain only lowercase letters, numbers and hyphens"
     },
-    "FacebookAppId": {
+    "FbAppId": {
       "Description": "Facebook app used for user authentication",
       "Type": "String",
       "AllowedPattern": "[0-9]*",
@@ -51,6 +51,41 @@
             "Value": {"Ref": "ProjectName"}
           }
         ]
+      }
+    },
+    "WebsiteBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "ProjectName",
+            "Value": {"Ref": "ProjectName"}
+          }
+        ],
+        "WebsiteConfiguration": {
+          "IndexDocument": "index.html"
+        }
+      }
+    },
+    "WebsiteBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "WebsiteBucket"},
+        "PolicyDocument": {
+          "Version":"2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Resource": { 
+                "Fn::Join" : ["", ["arn:aws:s3:::", {"Ref": "WebsiteBucket"} , "/*"]]
+              }
+            }
+          ]
+        }
       }
     },
     "JobStatusTable": {
@@ -159,7 +194,7 @@
               "Action": "sts:AssumeRoleWithWebIdentity",
               "Condition": {
                 "StringEquals": {
-                  "graph.facebook.com:app_id": {"Ref": "FacebookAppId"}
+                  "graph.facebook.com:app_id": {"Ref": "FbAppId"}
                 }
               }
             }
@@ -680,6 +715,26 @@
       "Value": {"Fn::Join": ["",
         ["https://", {"Ref": "JobApi"}, ".execute-api.", {"Ref": "AWS::Region"}, ".amazonaws.com"]
       ]}
+    },
+    "FbAppId": {
+      "Description": "Facebook app id used for the app",
+      "Value": {"Ref": "FbAppId"}
+    },
+    "BucketName": {
+      "Description": "Name of S3 bucket used for uploads",
+      "Value": {"Ref": "UploadBucket"}
+    },
+    "Region": {
+      "Description": "AWS Region stack was deployed in",
+      "Value": {"Ref": "AWS::Region"}
+    },
+    "AssumeRoleArn": {
+      "Description": "Role Arn to assume by client via WebIdentity federation",
+      "Value": {"Fn::GetAtt": ["BucketFbIdentityRole", "Arn"]}
+    },
+    "WebsiteBucket": {
+      "Description": "S3 bucket to host static web assets",
+      "Value": {"Ref": "WebsiteBucket"}
     }
   }
 }
