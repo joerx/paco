@@ -1,18 +1,9 @@
-# Polly Image Reader App
+# Paco Image Reader App
 
 - Idea: use text recognition to extract text from uploaded files
 - Then use polly to read the contents on the file
 - Do this completely serverless using S3 and Lambda
-- Write a terraform plan to roll out the application
-
-## TODO
-
-- Generate signed URL for upload per backend function (removes dependency on S3 SDK)
-- Generate signed URLs for download per backend function
-- Visual feedback for image upload in frontend
-- Don't generate speech if no text was found in image
-- Decouple functions, avoid direct invocations (using SNS?)
-- ~~Use BUCKET_NAME as env var across the board~~
+- CloudFormation template to roll out the application
 
 ## Drag & Drop File Upload
 
@@ -268,10 +259,26 @@ SNS with subscribed Lambdas:
 - Additional permission in ExtractText to invoke TextToSpeech
 - Polly n/a in ap-southeast-1, but can use different region as needed
 
-## Next Steps
+## CloudFormation
 
-- Use SNS as message bus for coordination
+- Using CloudFormation, JSON this time, but several disadvantages (hard to read, no comments, ..)
+- Two-step process: `cloudformation package` uploads code assets, `cloudformation deploy` deploys
+- There is [AWS SAM](https://aws.amazon.com/about-aws/whats-new/2016/11/introducing-the-aws-serverless-application-model/) - but it seems standard CFN has all this built in
+- Adding a `Makefile` as a simpler wrapper around CFN commands
+
+## Further Work
+
+- This is a POC/exercise project, some tradeoffs to GTD
+- Direct coupling between Lambdas, better use SNS as message bus for coordination
 - Single Lambda as "coordinator", receiving events and calling other Lambdas
-- Another Lambda to update Job status, no DynamoDB access by "Worker" functions
+- Lambda to track/update Job status, no DynamoDB access by "Worker" functions
 - Move permissions to invoke functions via SNS into resource policies instead of assigning them to execution roles
 - APIs to process logins & generate signed upload URLs, no dependency on AWS SDK in frontend
+- Visual feedback for image upload in frontend
+- Don't generate speech if no text was found in image
+- ~~Use BUCKET_NAME as env var across the board~~
+
+## Resources 
+
+- [Swagger cloudformation example](https://github.com/matsev/cloudformation-swagger-api-gateway/blob/master/cloudformation.template)
+- [Blog post for previous link](https://blog.jayway.com/2016/09/18/introduction-swagger-cloudformation-api-gateway/)
