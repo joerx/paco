@@ -423,12 +423,6 @@
         ]
       }
     },
-    "ApiGatewayAccount": {
-      "Type" : "AWS::ApiGateway::Account",
-      "Properties" : {
-        "CloudWatchRoleArn": {"Fn::GetAtt": ["ApiGatewayLogsRole", "Arn"]}
-      }
-    },
     "JobApi": {
       "Type": "AWS::ApiGateway::RestApi",
       "Properties": {
@@ -552,9 +546,6 @@
       }
     },
     "JobApiDeployment": {
-      "DependsOn": [
-        "ApiGatewayAccount"
-      ],
       "Type": "AWS::ApiGateway::Deployment",
       "Properties": {
         "RestApiId": {"Ref": "JobApi"},
