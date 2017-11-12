@@ -1,3 +1,3 @@
 localhost:8080
 gzip
-root web/
+root web/dist/
