@@ -3,3 +3,4 @@ samples/
 setenv
 out/
 web/dist
+.env
