@@ -4,3 +4,4 @@ setenv
 out/
 web/dist
 .env
+.serverless

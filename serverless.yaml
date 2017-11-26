@@ -1,0 +1,95 @@
+service: paco
+provider:
+  name: aws
+  runtime: nodejs6.10
+  stage: dev
+  region: ap-southeast-1
+
+functions:
+  GetJobs:
+    handler: lambda/GetJobs/index.handler
+    environment:
+      TABLE_NAME: {'Ref': 'JobTable'}
+      BUCKET_NAME: {'Ref': 'UploadBucket'}
+    memorySize: 128
+    timeout: 15
+    events:
+      - http: GET /jobs
+  
+  CreateJobs:
+    handler: lambda/CreateJob/index.handler
+    environment:
+    memorySize: 128
+    timeout: 15
+    events:
+      - http: POST /jobs
+
+resources:
+  Resources:
+    # Table to maintain job status information
+    JobTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        ProvisionedThroughput:
+          WriteCapacityUnits: 1
+          ReadCapacityUnits: 1
+        KeySchema:
+          - KeyType: HASH
+            AttributeName: userId
+          - KeyType: RANGE
+            AttributeName: jobId
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: jobId
+            AttributeType: S
+        Tags:
+          - Key: ProjectName
+            Value: PacoS
+    # Policy to govern r/w access to the JobTable
+    JobTablePolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        Description: DynamoDB access for API functions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'dynamodb:BatchGetItem'
+                - 'dynamodb:BatchWriteItem'
+                - 'dynamodb:DeleteItem'
+                - 'dynamodb:DeleteTable'
+                - 'dynamodb:DescribeLimits'
+                - 'dynamodb:DescribeStream'
+                - 'dynamodb:DescribeTable'
+                - 'dynamodb:GetItem'
+                - 'dynamodb:GetRecords'
+                - 'dynamodb:GetShardIterator'
+                - 'dynamodb:ListStreams'
+                - 'dynamodb:PutItem'
+                - 'dynamodb:Query'
+                - 'dynamodb:Scan'
+                - 'dynamodb:UpdateItem'
+              Resource:
+                - {'Fn::GetAtt': ['JobTable', 'Arn']}
+              Effect: Allow
+              Sid: 'S1'
+    UploadBucket:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - '*'
+              AllowedOrigins:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - HEAD
+                - POST
+              MaxAge: '3600'
+              Id: ACorsRule
+        Tags:
+          - Key: ProjectName
+            Value: PacoS

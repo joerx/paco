@@ -1,0 +1,574 @@
+AWSTemplateFormatVersion: 2010-09-09
+Outputs:
+  WebsiteBucket:
+    Description: S3 bucket to host static web assets
+    Value: !Ref WebsiteBucket
+  ApiUrl:
+    Description: Root URL of the API
+    Value: !Join 
+      - ''
+      - - 'https://'
+        - !Ref JobApi
+        - .execute-api.
+        - !Ref 'AWS::Region'
+        - .amazonaws.com
+        - /
+        - !Ref ProjectStage
+  FbAppId:
+    Description: Facebook app id used for the app
+    Value: !Ref FbAppId
+  Region:
+    Description: AWS Region stack was deployed in
+    Value: !Ref 'AWS::Region'
+  AssumeRoleArn:
+    Description: Role Arn to assume by client via WebIdentity federation
+    Value: !GetAtt 
+      - BucketFbIdentityRole
+      - Arn
+  BucketName:
+    Description: Name of S3 bucket used for uploads
+    Value: !Ref UploadBucket
+Parameters:
+  DynamoDBReadCap:
+    Default: '1'
+    Type: Number
+    Description: Read capacity units to reserve for job status table
+  ProjectStage:
+    AllowedPattern: '[a-z0-9]*'
+    Default: dev
+    Type: String
+    Description: >-
+      Stage to be deployed, e.g. dev, staging, production. Used as base path for
+      the API
+  FbAppId:
+    AllowedPattern: '[0-9]*'
+    Type: String
+    ConstraintDescription: Must be a sequence of numbers
+    Description: Facebook app used for user authentication
+  DynamoDBWriteCap:
+    Default: '1'
+    Type: Number
+    Description: Write capacity units to reserve for job status table
+  GoogleAPIKey:
+    Type: String
+    Description: Google API key to access Google Cloud Vision API
+  ProjectName:
+    Default: my-project
+    AllowedPattern: '[a-z]{1}[-a-z0-9]*'
+    Type: String
+    Description: 'Project name, used in tags to identify resources'
+    ConstraintDescription: >-
+      Must start with a lowercase character and contain only lowercase letters,
+      numbers and hyphens
+  ProjectVersion:
+    Default: 1.0.0-beta
+    Type: String
+    Description: 'Version of the project being deployed. Used in API definitions, etc'
+Description: >-
+  Serverless app consisting of multiple Lambda functions, a DynamoDB table and a
+  statically hosted website
+Resources:
+  WebsiteBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+      WebsiteConfiguration:
+        IndexDocument: index.html
+  ApiGatewayLogsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - >-
+          arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+  CreateJobFn:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref JobStatusTable
+          BUCKET_NAME: !Ref UploadBucket
+          TEXT_DETECTION_FN_NAME: !Ref DetectTextFn
+      Code:
+        S3Bucket: 468871832330-paco-kode
+        S3Key: bfaaef82da2aeb23ec88d13c1c573914
+      Role: !GetAtt 
+        - CreateJobFnRole
+        - Arn
+      Timeout: '25'
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+      Handler: index.handler
+      Runtime: nodejs6.10
+  DetectTextFn:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Environment:
+        Variables:
+          TEXT_TO_SPEECH_FN_NAME: !Ref TextToSpeechFn
+          GOOGLE_API_KEY: !Ref GoogleAPIKey
+          BUCKET_NAME: !Ref UploadBucket
+          TABLE_NAME: !Ref JobStatusTable
+      Code:
+        S3Bucket: 468871832330-paco-kode
+        S3Key: 18d2c5cebe46d2a94554c0737217e821
+      Role: !GetAtt 
+        - DetectTextFnRole
+        - Arn
+      Timeout: '300'
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+      Handler: index.handler
+      Runtime: nodejs6.10
+  InvokeDetectTextFnPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Description: Permission to invoke text detection function
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'lambda:InvokeAsync'
+              - 'lambda:InvokeFunction'
+            Resource:
+              - !GetAtt 
+                - DetectTextFn
+                - Arn
+            Effect: Allow
+            Sid: Stmt1508053766000
+  JobStatusTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      ProvisionedThroughput:
+        WriteCapacityUnits: !Ref DynamoDBWriteCap
+        ReadCapacityUnits: !Ref DynamoDBReadCap
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: userId
+        - KeyType: RANGE
+          AttributeName: jobId
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: jobId
+          AttributeType: S
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+  BucketGetObjectPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Resource:
+              - !Join 
+                - ''
+                - - !GetAtt 
+                    - UploadBucket
+                    - Arn
+                  - /*
+            Effect: Allow
+            Sid: Stmt1508039776000
+      Description: Policy to allow read access to the upload bucket
+  BucketFbUploadPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource:
+              - !Join 
+                - ''
+                - - !GetAtt 
+                    - UploadBucket
+                    - Arn
+                  - '/fb_${graph.facebook.com:id}/*'
+            Effect: Allow
+          - Action:
+              - 's3:ListBucket'
+            Resource:
+              - !GetAtt 
+                - UploadBucket
+                - Arn
+            Effect: Allow
+            Condition:
+              StringEquals:
+                's3:prefix': 'fb_${graph.facebook.com:id}'
+      Description: Allow writing objects into the file upload bucket by Facebook user
+  TextToSpeechPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'polly:DescribeVoices'
+              - 'polly:SynthesizeSpeech'
+            Resource:
+              - '*'
+            Effect: Allow
+            Sid: Stmt1508165618000
+      Description: Allow usage of Amazon Polly API for speech synthesis
+  UploadBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - HEAD
+              - POST
+            MaxAge: '3600'
+            Id: CORSRuleId1
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+  BucketFbIdentityRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - !Ref BucketFbUploadPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'sts:AssumeRoleWithWebIdentity'
+            Effect: Allow
+            Condition:
+              StringEquals:
+                'graph.facebook.com:app_id': !Ref FbAppId
+            Principal:
+              Federated: graph.facebook.com
+  TextToSpeechFn:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+          TABLE_NAME: !Ref JobStatusTable
+      Code:
+        S3Bucket: 468871832330-paco-kode
+        S3Key: 7be6cf1bb5f8a6de556e8214bd6ce176
+      Role: !GetAtt 
+        - TextToSpeechFnRole
+        - Arn
+      Timeout: '300'
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+      Handler: index.handler
+      Runtime: nodejs6.10
+  JobTablePolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'dynamodb:BatchGetItem'
+              - 'dynamodb:BatchWriteItem'
+              - 'dynamodb:DeleteItem'
+              - 'dynamodb:DeleteTable'
+              - 'dynamodb:DescribeLimits'
+              - 'dynamodb:DescribeStream'
+              - 'dynamodb:DescribeTable'
+              - 'dynamodb:GetItem'
+              - 'dynamodb:GetRecords'
+              - 'dynamodb:GetShardIterator'
+              - 'dynamodb:ListStreams'
+              - 'dynamodb:PutItem'
+              - 'dynamodb:Query'
+              - 'dynamodb:Scan'
+              - 'dynamodb:UpdateItem'
+            Resource:
+              - !GetAtt 
+                - JobStatusTable
+                - Arn
+            Effect: Allow
+            Sid: Stmt1507424001000
+      Description: DynamoDB access for API functions
+  CreateJobFnRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - !Ref LogStreamPolicy
+        - !Ref JobTablePolicy
+        - !Ref InvokeDetectTextFnPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+  GetJobsFn:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref UploadBucket
+          TABLE_NAME: !Ref JobStatusTable
+      Code:
+        S3Bucket: 468871832330-paco-kode
+        S3Key: 7c7f20887d4071e7f5270ea423a60a97
+      Role: !GetAtt 
+        - GetJobsFnRole
+        - Arn
+      Timeout: '300'
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+      Handler: index.handler
+      Runtime: nodejs6.10
+  LogStreamPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+              - 'logs:PutLogEvents'
+              - 'logs:GetLogEvents'
+              - 'logs:FilterLogEvents'
+            Resource: 'arn:aws:logs:*:*:*'
+            Effect: Allow
+      Description: Generic policy to grant LogStream access to Lambda functions
+  BucketPutObjectPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+              - 's3:PutObjectTagging'
+            Resource:
+              - !Join 
+                - ''
+                - - !GetAtt 
+                    - UploadBucket
+                    - Arn
+                  - /*
+            Effect: Allow
+      Description: Allow writing objects into the file upload bucket by system actors
+  DetectTextFnRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - !Ref LogStreamPolicy
+        - !Ref JobTablePolicy
+        - !Ref BucketGetObjectPolicy
+        - !Ref InvokeTextToSpeechFnPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+  JobApiDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      StageDescription:
+        MethodSettings:
+          - HttpMethod: '*'
+            ResourcePath: /*
+            DataTraceEnabled: true
+            LoggingLevel: INFO
+      RestApiId: !Ref JobApi
+      StageName: !Ref ProjectStage
+  WebsiteBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref WebsiteBucket
+                - /*
+            Effect: Allow
+            Principal: '*'
+      Bucket: !Ref WebsiteBucket
+  InvokeCreateJobPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      Principal: apigateway.amazonaws.com
+      FunctionName: !GetAtt 
+        - CreateJobFn
+        - Arn
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${JobApi}/*'
+  GetJobsFnRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - !Ref LogStreamPolicy
+        - !Ref JobTablePolicy
+        - !Ref BucketGetObjectPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+  InvokeTextToSpeechFnPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Description: Permission to invoke speech synthesis function
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'lambda:InvokeAsync'
+              - 'lambda:InvokeFunction'
+            Resource:
+              - !GetAtt 
+                - TextToSpeechFn
+                - Arn
+            Effect: Allow
+  TextToSpeechFnRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - !Ref LogStreamPolicy
+        - !Ref JobTablePolicy
+        - !Ref BucketPutObjectPolicy
+        - !Ref TextToSpeechPolicy
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+  JobApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Body:
+        info:
+          version: !Ref ProjectVersion
+          title: !Join 
+            - '-'
+            - - !Ref ProjectName
+              - api
+        paths:
+          /jobs:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                contentHandling: CONVERT_TO_TEXT
+                responses:
+                  default:
+                    statusCode: '200'
+                passthroughBehavior: when_no_match
+                type: aws_proxy
+                uri: !Sub >-
+                  arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateJobFn.Arn}/invocations
+              responses:
+                '200':
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+              produces:
+                - application/json
+            options:
+              x-amazon-apigateway-integration:
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                passthroughBehavior: when_no_match
+                type: mock
+                responses:
+                  default:
+                    statusCode: '200'
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: >-
+                        'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'
+              responses:
+                '200':
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+                  description: OK
+                  schema:
+                    $ref: '#/definitions/Empty'
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                contentHandling: CONVERT_TO_TEXT
+                responses:
+                  default:
+                    statusCode: '200'
+                passthroughBehavior: when_no_match
+                type: aws_proxy
+                uri: !Sub >-
+                  arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetJobsFn.Arn}/invocations
+              responses:
+                '200':
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+        schemes:
+          - https
+        definitions:
+          Empty:
+            type: object
+            title: Empty Schema
+        basePath: !Sub '/${ProjectStage}'
+        swagger: '2.0'
+      FailOnWarnings: true
+      Name: !Join 
+        - '-'
+        - - !Ref ProjectName
+          - api
+      Description: !Sub 'API to create and query jobs for project ${ProjectName}'
+  InvokeGetJobsPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      Principal: apigateway.amazonaws.com
+      FunctionName: !GetAtt 
+        - GetJobsFn
+        - Arn
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${JobApi}/*'
