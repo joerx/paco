@@ -11,11 +11,9 @@
 
         options = Object.assign({}, options);
 
-        // var baseUrl = 'https://r50lrn6iv2.execute-api.ap-southeast-1.amazonaws.com';
-
         var baseUrl = options.apiUrl;
-        var createJobUrl = baseUrl+'/dev';
-        var getJobsUrl = baseUrl+'/dev/jobs';
+        var createJobUrl = baseUrl+'/jobs';
+        var getJobsUrl = baseUrl+'/jobs';
     
         var allowedTypes = {
             'image/png': 'png', 

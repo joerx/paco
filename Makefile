@@ -1,7 +1,11 @@
+PROJECT_NAME ?= $(shell basename $$PWD)
+
 version=$(shell date +%s)
 # version=0.5.0-beta
 stack_name=$(PROJECT_NAME)
-code_bucket_name=$(stack_name)-code
+code_bucket_name=$(aws_account_id)-$(stack_name)-kode
+aws_account_id= $(shell aws sts get-caller-identity --output text --query 'Account')
+
 
 cfn_params=\
 	FbAppId=$(FBAPPID) \
@@ -17,16 +21,28 @@ install: cfn-package cfn-deploy web-publish
 destroy: cfn-destroy
 show-events: cfn-events
 
+help:
+	@echo "Available Targets"
+	@echo "init:     Init the AWS environment"
+	@echo "install:  Deploy/update the CloudFormation stack, build and deploy static assets"
+	@echo "destroy:  Destroy the CloudFormation stack and associated resources"
+
 # TODO:
 # - install node_modules for each lambda before cfn-package
 # - build static website (sub-make?)
 # - publish web assets into s3 bucket
+
+debug:
+	@echo "Project name: $(PROJECT_NAME)"
+	@echo "Account id: $(aws_account_id)"
+	@echo "Code bucket: $(code_bucket_name)"
 
 checkenv:
 	@test -n "$(PROJECT_NAME)" || (echo "Missing PROJECT_NAME"; exit 1)
 	@test -n "$(GOOGLE_API_KEY)" || (echo "Missing GOOGLE_API_KEY"; exit 1)
 	@test -n "$(FBAPPID)" || (echo "Missing FBAPPID"; exit 1)
 	@which jq || (echo "jq is required"; exit 1)
+	@which aws || (echo "aws cli is required"; exit 1)
 
 cfn-init:
 	aws s3 mb s3://$(code_bucket_name)
@@ -36,7 +52,7 @@ cfn-package: checkenv
 	mkdir -p out/
 	@for dir in `find lambda -mindepth 1 -maxdepth 1 -type d`;do yarn --cwd $$dir install; done
 	aws cloudformation package \
-		--template-file cf/stack.json \
+		--template-file cfn/stack.json \
 		--s3-bucket $(code_bucket_name) \
 		--use-json \
 		--output-template-file \
