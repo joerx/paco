@@ -4,6 +4,7 @@ Upload an image containing text, have the text extracted and played back to you.
 
 Technologies involved:
 
+- [Serverless][2]
 - DynamoDB, Lambda, S3, API Gateway
 - CloudFormation
 - VanillaJS Frontend (don't look at it)
@@ -13,26 +14,31 @@ Technologies involved:
 ## Preparation
 
 - Ensure you have AWS configured to use the correct account region
+- Create a hosted zone for the domain you want to use
 - Ensure you have a log role for APIGateway set up, [see here][1]
-- Run `make init` to create the S3 bucket to store Lambda code assets
 - Create a Facebook app, take note of app id
 - Create a Google app and API Key, take note of the key
 
-## Deployment
+## Configuration
 
-Package, then deploy the CloudFormation template and static web assets:
+- Set the following environment vars according to your project:
 
 ```sh
-make install FBAPPID=1234 PROJECT_NAME=my-demo GOOGLE_API_KEY=abc-123 
+export PROJECT_NAME=$(basename $PWD)
+export GOOGLE_API_KEY=<your api key>
+export FB_APP_ID=<your app id>
+export DOMAIN_NAME=<your domain>
 ```
+
+## Deployment
+
+- Using Makefile: `make clean deploy`
+- This will run the serverless deployment and publish website assets
+- For more info, see the [Makefile](./Makefile)
 
 ## Uninstall
 
-- Delete the CloudFormation stack
-
-```sh
-make destroy
-```
+- TODO
 
 ## Future Work
 
