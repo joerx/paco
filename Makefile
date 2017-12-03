@@ -7,15 +7,20 @@ hbs=./node_modules/.bin/hbs
 
 bucket=$(shell cat out/cfn.outputs.json | jq -r '.WebsiteBucket')
 
-init: cfn-init
 build: build-web
 deploy: deploy-sls deploy-web
 clean: clean-sls clean-web
+update: clean deploy
+update-web: clean-web deploy-web
 
 help:
 	@echo "Available Targets"
-	@echo "deploy:   Deploy/update the Serverless stack and static assets"
-	@echo "destroy:  Destroy the stack and associated resources"
+	@echo "build:        Rebuild static assets"
+	@echo "deploy:       Deploy if not deployed already"
+	@echo "update:       Clean outputs and deploy (forces rebuild)"
+	@echo "update-web:   Clean, build and deploy web dist files"
+	@echo "clean:        Delete all outputs and dist files"
+	@echo "clean-web:    Delete web dist files"
 
 debug:
 	@echo "Project name: $(PROJECT_NAME)"

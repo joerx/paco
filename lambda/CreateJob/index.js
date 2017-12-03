@@ -76,18 +76,17 @@ const mkResponse = (statusCode, data) => {
 }
 
 const invokeTextDetection = (event, cb) => {
-  cb(null);
-  // console.log('Invoking lambda '+detectorFnName+':'+detectorFnVersion);
+  console.log('Invoking '+detectorFnName+':'+detectorFnVersion);
 
-  // const lambda = new AWS.Lambda();
-  // const params = {
-  //     FunctionName: detectorFnName,
-  //     Qualifier: detectorFnVersion,
-  //     InvocationType: 'Event',
-  //     Payload: JSON.stringify(event)
-  // }
+  const lambda = new AWS.Lambda();
+  const params = {
+      FunctionName: detectorFnName,
+      Qualifier: detectorFnVersion,
+      InvocationType: 'Event',
+      Payload: JSON.stringify(event)
+  }
 
-  // lambda.invoke(params, cb);
+  lambda.invoke(params, cb);
 }
 
 const parseRequest = (request) => {

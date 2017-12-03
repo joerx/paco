@@ -32,6 +32,7 @@ functions:
     environment:
       TABLE_NAME: {Ref: 'JobTable'}
       BUCKET_NAME: {Ref: 'UploadBucket'}
+      TEXT_DETECTION_FN_NAME: {Ref: 'DetectTextLambdaFunction'}
     memorySize: 128
     timeout: 15
     role: {Fn::GetAtt: ['CreateJobRole', 'Arn']}
@@ -41,11 +42,43 @@ functions:
           method: post
           cors: true
   # DetectText - detect and extract text on the uplaoded images using Google CloudVision
+  # No triggers, is invoked by another function
+  DetectText: 
+    handler: lambda/DetectText/index.handler
+    environment:
+      TABLE_NAME: {Ref: 'JobTable'}
+      BUCKET_NAME: {Ref: 'UploadBucket'}
+      TEXT_TO_SPEECH_FN_NAME: {Ref: 'TextToSpeechLambdaFunction'}
+      GOOGLE_API_KEY: '{{env:GOOGLE_API_KEY}}'
+    memorySize: 128
+    timeout: 300
+    role: {Fn::GetAtt: ['DetectTextRole', 'Arn']}
   # TextToSpeech - convert extracted text to audio using Polly
+  TextToSpeech:
+    handler: lambda/TextToSpeech/index.handler
+    environment:
+      TABLE_NAME: {Ref: 'JobTable'}
+      BUCKET_NAME: {Ref: 'UploadBucket'}
+    memorySize: 128
+    timeout: 300
+    role: {Fn::GetAtt: ['TextToSpeechRole', 'Arn']}
 resources:
   Resources:
-    # IAM Policy Resources
-    # InvokeDetectTextFnPolicy
+    # -- IAM Policy Resources --
+    # InvokeDetectTextPolicy
+    InvokeDetectTextPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Description: Permission to invoke text detection function
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'lambda:InvokeAsync'
+                - 'lambda:InvokeFunction'
+              Resource:
+                {Fn::GetAtt: [DetectTextLambdaFunction, Arn]}
+              Effect: Allow
     # BucketGetObjectPolicy
     BucketGetObjectPolicy:
       Type: 'AWS::IAM::ManagedPolicy'
@@ -80,6 +113,18 @@ resources:
                 StringEquals:
                   's3:prefix': 'fb_${graph.facebook.com:id}'
     # TextToSpeechPolicy - invoke polly
+    TextToSpeechPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'polly:DescribeVoices'
+                - 'polly:SynthesizeSpeech'
+              Resource:
+                - '*'
+              Effect: Allow
     # LogStreamPolicy - required for all functions
     LogStreamPolicy:
       Type: 'AWS::IAM::ManagedPolicy'
@@ -99,6 +144,20 @@ resources:
                 Fn::Join: [':', ['arn:aws:logs', {Ref: 'AWS::Region'}, {Ref: 'AWS::AccountId'}, 'log-group:*:*']]
               Effect: Allow
     # BucketPutObjectPolicy - permission for Lambdas to put objects into the UploadBucket
+    BucketPutObjectPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 's3:PutObject'
+                - 's3:PutObjectAcl'
+                - 's3:PutObjectTagging'
+              Resource:
+                Fn::Join: ['', ['arn:aws:s3:::', {'Ref': UploadBucket}, /*]]
+              Effect: Allow
+        Description: Allow writing objects into the file upload bucket by system actors
     # WebsiteBucketPolicy - public read access for website
     WebsiteBucketPolicy:
       Type: 'AWS::S3::BucketPolicy'
@@ -114,7 +173,20 @@ resources:
         Bucket: {Ref: WebsiteBucket}
     # InvokeCreateJobPermission - permission to invoke CreateJob for API Gateway (not required?)
     # InvokeGetJobsPermission - permission to invoke GetJobs for API Gateway (not required?)
-    # InvokeTextToSpeechFnPolicy - permission to invoke TextToSpeech
+    # InvokeTextToSpeechPolicy - permission to invoke TextToSpeech
+    InvokeTextToSpeechPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'lambda:InvokeAsync'
+                - 'lambda:InvokeFunction'
+              Resource:
+                Fn::GetAtt: [TextToSpeechLambdaFunction, Arn]
+              Effect: Allow
+    # JobTablePolicy - Permits r/w operations on job status table
     JobTablePolicy:
       Type: 'AWS::IAM::ManagedPolicy'
       Properties:
@@ -164,7 +236,7 @@ resources:
         ManagedPolicyArns:
           - {Ref: LogStreamPolicy}
           - {Ref: JobTablePolicy}
-          # - {Ref: InvokeDetectTextFnPolicy} # TODO
+          - {Ref: InvokeDetectTextPolicy}
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -172,7 +244,22 @@ resources:
               Effect: Allow
               Principal:
                 Service: lambda.amazonaws.com
-    # DetectTextFnRole - execution role for DetectText
+    # DetectTextRole - execution role for DetectText
+    DetectTextRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        ManagedPolicyArns:
+          - {Ref: LogStreamPolicy}
+          - {Ref: JobTablePolicy}
+          - {Ref: BucketGetObjectPolicy}
+          - {Ref: InvokeTextToSpeechPolicy}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: 'sts:AssumeRole'
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
     # GetJobsRole - execution role for GetJobs
     GetJobsRole:
       Type: 'AWS::IAM::Role'
@@ -188,7 +275,22 @@ resources:
               Effect: Allow
               Principal:
                 Service: lambda.amazonaws.com
-    # TextToSpeechFnRole - execution role for TextToSpeech
+    # TextToSpeechRole - execution role for TextToSpeech
+    TextToSpeechRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        ManagedPolicyArns:
+          - {Ref: LogStreamPolicy}
+          - {Ref: JobTablePolicy}
+          - {Ref: BucketPutObjectPolicy}
+          - {Ref: TextToSpeechPolicy}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: 'sts:AssumeRole'
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
     # --
     # S3 Buckets
     UploadBucket:
@@ -214,7 +316,6 @@ resources:
     WebsiteBucket:
       Type: 'AWS::S3::Bucket'
       Properties:
-        # BucketName: paco-dev.yodo.io
         BucketName: '{{self:service}}-{{opt:stage}}.{{env:DOMAIN_NAME}}'
         Tags:
           - Key: ProjectName
@@ -258,8 +359,6 @@ resources:
       Value: {Ref: WebsiteBucket}
     BucketURL:
       Value: {Fn::GetAtt: [WebsiteBucket, WebsiteURL]}
-    # WebsiteURL:
-    #   Value: {Ref: WebsiteDNSRecord}
     UploadBucket:
       Value: {Ref: UploadBucket}
     RoleArn:
