@@ -9,57 +9,11 @@ const bucketName = process.env.BUCKET_NAME;
 const detectorFnName = process.env.TEXT_DETECTION_FN_NAME;
 const detectorFnVersion = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
 
-const mkResponse = (statusCode, data) => {
-    return {
-        statusCode,
-        body: JSON.stringify(data)+'\n',
-        headers: {
-            'Content-type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-    }
-}
-
-const invokeTextDetection = (event, cb) => {
-    console.log('Invoking lambda '+detectorFnName+':'+detectorFnVersion);
-
-    const lambda = new AWS.Lambda();
-    const params = {
-        FunctionName: detectorFnName,
-        Qualifier: detectorFnVersion,
-        InvocationType: 'Event',
-        Payload: JSON.stringify(event)
-    }
-
-    lambda.invoke(params, cb);
-}
-
-const parseRequest = (request) => {
-    const data = JSON.parse(request.body);
-    let err = null;
-
-    if (!data) {
-        err = 'No request body received';
-    }
-    else if (!data.key) {
-        err = 'Object key is missing';
-    }
-    else if (!data.type) {
-        err = 'Object type is missing';
-    }
-    else if (!data.userId) {
-        err = 'User id is missing';
-    }
-
-    if (err) return [err, null];
-    else return [null, data];
-}
-
 exports.handler = (request, context, cb) => {
 
     assert(bucketName, 'BUCKET_NAME is required');
     assert(tableName, 'TABLE_NAME is required');
-    assert(detectorFnName, 'TEXT_DETECTION_FN_NAME is required');
+    // assert(detectorFnName, 'TEXT_DETECTION_FN_NAME is required');
 
     const [error, data] = parseRequest(request);
     if (error) {
@@ -107,4 +61,52 @@ exports.handler = (request, context, cb) => {
             }
         });
     });
+}
+
+
+const mkResponse = (statusCode, data) => {
+  return {
+      statusCode,
+      body: JSON.stringify(data)+'\n',
+      headers: {
+          'Content-type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+      },
+  }
+}
+
+const invokeTextDetection = (event, cb) => {
+  cb(null);
+  // console.log('Invoking lambda '+detectorFnName+':'+detectorFnVersion);
+
+  // const lambda = new AWS.Lambda();
+  // const params = {
+  //     FunctionName: detectorFnName,
+  //     Qualifier: detectorFnVersion,
+  //     InvocationType: 'Event',
+  //     Payload: JSON.stringify(event)
+  // }
+
+  // lambda.invoke(params, cb);
+}
+
+const parseRequest = (request) => {
+  const data = JSON.parse(request.body);
+  let err = null;
+
+  if (!data) {
+      err = 'No request body received';
+  }
+  else if (!data.key) {
+      err = 'Object key is missing';
+  }
+  else if (!data.type) {
+      err = 'Object type is missing';
+  }
+  else if (!data.userId) {
+      err = 'User id is missing';
+  }
+
+  if (err) return [err, null];
+  else return [null, data];
 }

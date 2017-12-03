@@ -4,28 +4,225 @@ provider:
   runtime: nodejs6.10
   stage: dev
   region: ap-southeast-1
-
+  variableSyntax: "{{([ ~:a-zA-Z0-9._\\'\",\\-\\/\\(\\)]+?)}}"
+plugins:
+  - serverless-stack-output
+custom:
+  output:
+    handler: scripts/output.handler # Same syntax as you already know
+    file: out/cfn.outputs.json # toml, yaml, yml, and json format is available
 functions:
+  # Get the list of jobs and their status from the system
   GetJobs:
     handler: lambda/GetJobs/index.handler
     environment:
-      TABLE_NAME: {'Ref': 'JobTable'}
-      BUCKET_NAME: {'Ref': 'UploadBucket'}
+      TABLE_NAME: {Ref: 'JobTable'}
+      BUCKET_NAME: {Ref: 'UploadBucket'}
     memorySize: 128
     timeout: 15
+    role: {Fn::GetAtt: ['GetJobsRole', 'Arn']}
     events:
-      - http: GET /jobs
-  
-  CreateJobs:
+      - http:
+          path: jobs
+          method: get
+          cors: true
+  # CreateJob - receive jobs to process, register in DynamoDB and pass on to processing
+  CreateJob:
     handler: lambda/CreateJob/index.handler
     environment:
+      TABLE_NAME: {Ref: 'JobTable'}
+      BUCKET_NAME: {Ref: 'UploadBucket'}
     memorySize: 128
     timeout: 15
+    role: {Fn::GetAtt: ['CreateJobRole', 'Arn']}
     events:
-      - http: POST /jobs
-
+      - http: 
+          path: jobs
+          method: post
+          cors: true
+  # DetectText - detect and extract text on the uplaoded images using Google CloudVision
+  # TextToSpeech - convert extracted text to audio using Polly
 resources:
   Resources:
+    # IAM Policy Resources
+    # InvokeDetectTextFnPolicy
+    # BucketGetObjectPolicy
+    BucketGetObjectPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 's3:GetObject'
+              Resource:
+                - {Fn::Join: ['', [{Fn::GetAtt: ['UploadBucket', 'Arn']}, '/*']]}
+              Effect: Allow
+    # BucketFbUploadPolicy - put objects into bucket by FB users
+    BucketFbUploadPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 's3:PutObject'
+                - 's3:PutObjectAcl'
+              Resource:
+                - {Fn::Join: ['', [{Fn::GetAtt: ['UploadBucket', 'Arn']}, '/fb_${graph.facebook.com:id}/*']]}
+              Effect: Allow
+            - Action:
+                - 's3:ListBucket'
+              Resource:
+                - {Fn::GetAtt: ['UploadBucket', 'Arn']}
+              Effect: Allow
+              Condition:
+                StringEquals:
+                  's3:prefix': 'fb_${graph.facebook.com:id}'
+    # TextToSpeechPolicy - invoke polly
+    # LogStreamPolicy - required for all functions
+    LogStreamPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'logs:CreateLogGroup'
+              Resource:
+                Fn::Join: [':', ['arn:aws:logs', {Ref: 'AWS::Region'}, {Ref: 'AWS::AccountId'}, '*']]
+              Effect: Allow
+            - Action:
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+              Resource: 
+                Fn::Join: [':', ['arn:aws:logs', {Ref: 'AWS::Region'}, {Ref: 'AWS::AccountId'}, 'log-group:*:*']]
+              Effect: Allow
+    # BucketPutObjectPolicy - permission for Lambdas to put objects into the UploadBucket
+    # WebsiteBucketPolicy - public read access for website
+    WebsiteBucketPolicy:
+      Type: 'AWS::S3::BucketPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: ['s3:GetObject']
+              Resource: 
+                Fn::Join: ['', ['arn:aws:s3:::', {'Ref': WebsiteBucket}, /*]]
+              Effect: Allow
+              Principal: '*'
+        Bucket: {Ref: WebsiteBucket}
+    # InvokeCreateJobPermission - permission to invoke CreateJob for API Gateway (not required?)
+    # InvokeGetJobsPermission - permission to invoke GetJobs for API Gateway (not required?)
+    # InvokeTextToSpeechFnPolicy - permission to invoke TextToSpeech
+    JobTablePolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        Description: DynamoDB access for API functions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'dynamodb:BatchGetItem'
+                - 'dynamodb:BatchWriteItem'
+                - 'dynamodb:DeleteItem'
+                - 'dynamodb:DeleteTable'
+                - 'dynamodb:DescribeTable'
+                - 'dynamodb:GetItem'
+                - 'dynamodb:GetRecords'
+                - 'dynamodb:GetShardIterator'
+                - 'dynamodb:PutItem'
+                - 'dynamodb:Query'
+                - 'dynamodb:Scan'
+                - 'dynamodb:UpdateItem'
+              Resource:
+                - {'Fn::GetAtt': ['JobTable', 'Arn']}
+              Effect: Allow
+              Sid: S1
+    # --
+    # IAM Roles composed of those policies (avoid inline policy statement)
+    # BucketFbIdentityRole - role assumed by FB users via Web Identity federation
+    BucketFbIdentityRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        ManagedPolicyArns:
+          - {Ref: BucketFbUploadPolicy}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: 'sts:AssumeRoleWithWebIdentity'
+              Effect: Allow
+              Condition:
+                StringEquals:
+                  'graph.facebook.com:app_id': '{{env:FB_APP_ID}}'
+              Principal:
+                Federated: graph.facebook.com
+    # CreateJobFnRole - execution role for CreateJob function
+    CreateJobRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        ManagedPolicyArns:
+          - {Ref: LogStreamPolicy}
+          - {Ref: JobTablePolicy}
+          # - {Ref: InvokeDetectTextFnPolicy} # TODO
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: 'sts:AssumeRole'
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+    # DetectTextFnRole - execution role for DetectText
+    # GetJobsRole - execution role for GetJobs
+    GetJobsRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        ManagedPolicyArns:
+          - {Ref: LogStreamPolicy}
+          - {Ref: JobTablePolicy}
+          - {Ref: BucketGetObjectPolicy}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: 'sts:AssumeRole'
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+    # TextToSpeechFnRole - execution role for TextToSpeech
+    # --
+    # S3 Buckets
+    UploadBucket:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - '*'
+              AllowedOrigins:
+                - '*'
+              AllowedMethods:
+                - GET
+                - PUT
+                - HEAD
+                - POST
+              MaxAge: '3600'
+              Id: ACorsRule
+        Tags:
+          - Key: ProjectName
+            Value: PacoS
+    # Bucket for static assets
+    WebsiteBucket:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+        # BucketName: paco-dev.yodo.io
+        BucketName: '{{self:service}}-{{opt:stage}}.{{env:DOMAIN_NAME}}'
+        Tags:
+          - Key: ProjectName
+            Value: PacoS
+        WebsiteConfiguration:
+          IndexDocument: index.html
+    # --
+    # DynamoDB table and associated policies
     # Table to maintain job status information
     JobTable:
       Type: 'AWS::DynamoDB::Table'
@@ -46,50 +243,28 @@ resources:
         Tags:
           - Key: ProjectName
             Value: PacoS
-    # Policy to govern r/w access to the JobTable
-    JobTablePolicy:
-      Type: 'AWS::IAM::ManagedPolicy'
+    # Resource record to point to website
+    WebsiteDNSRecord:
+      Type: AWS::Route53::RecordSet
       Properties:
-        Description: DynamoDB access for API functions
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Action:
-                - 'dynamodb:BatchGetItem'
-                - 'dynamodb:BatchWriteItem'
-                - 'dynamodb:DeleteItem'
-                - 'dynamodb:DeleteTable'
-                - 'dynamodb:DescribeLimits'
-                - 'dynamodb:DescribeStream'
-                - 'dynamodb:DescribeTable'
-                - 'dynamodb:GetItem'
-                - 'dynamodb:GetRecords'
-                - 'dynamodb:GetShardIterator'
-                - 'dynamodb:ListStreams'
-                - 'dynamodb:PutItem'
-                - 'dynamodb:Query'
-                - 'dynamodb:Scan'
-                - 'dynamodb:UpdateItem'
-              Resource:
-                - {'Fn::GetAtt': ['JobTable', 'Arn']}
-              Effect: Allow
-              Sid: 'S1'
+        HostedZoneName: '{{env:DOMAIN_NAME}}.'
+        Name: {Ref: WebsiteBucket} # name of resource record must match bucket name
+        Type: CNAME
+        TTL: '300'
+        ResourceRecords:
+          - {Fn::Join: ['', [{Ref: WebsiteBucket}, '.s3-website-', {Ref: 'AWS::Region'}, '.amazonaws.com']]}
+  Outputs:
+    WebsiteBucket:
+      Value: {Ref: WebsiteBucket}
+    BucketURL:
+      Value: {Fn::GetAtt: [WebsiteBucket, WebsiteURL]}
+    # WebsiteURL:
+    #   Value: {Ref: WebsiteDNSRecord}
     UploadBucket:
-      Type: 'AWS::S3::Bucket'
-      Properties:
-        CorsConfiguration:
-          CorsRules:
-            - AllowedHeaders:
-                - '*'
-              AllowedOrigins:
-                - '*'
-              AllowedMethods:
-                - GET
-                - PUT
-                - HEAD
-                - POST
-              MaxAge: '3600'
-              Id: ACorsRule
-        Tags:
-          - Key: ProjectName
-            Value: PacoS
+      Value: {Ref: UploadBucket}
+    RoleArn:
+      Value: {Fn::GetAtt: [BucketFbIdentityRole, Arn]}
+    FbAppId:
+      Value: '{{env:FB_APP_ID}}'
+    Region:
+      Value: {Ref: 'AWS::Region'}

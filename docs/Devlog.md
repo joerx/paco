@@ -295,3 +295,5 @@ Example `Makefile`s working with CloudFormation:
 
 - [Swagger cloudformation example](https://github.com/matsev/cloudformation-swagger-api-gateway/blob/master/cloudformation.template)
 - [Blog post for previous link](https://blog.jayway.com/2016/09/18/introduction-swagger-cloudformation-api-gateway/)
+
+

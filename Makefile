@@ -1,36 +1,21 @@
 PROJECT_NAME ?= $(shell basename $$PWD)
 
 version=$(shell date +%s)
-# version=0.5.0-beta
 stack_name=$(PROJECT_NAME)
-code_bucket_name=$(aws_account_id)-$(stack_name)-kode
-aws_account_id= $(shell aws sts get-caller-identity --output text --query 'Account')
+sls=./node_modules/.bin/serverless
+hbs=./node_modules/.bin/hbs
 
-
-cfn_params=\
-	FbAppId=$(FBAPPID) \
-	ProjectName=$(PROJECT_NAME) \
-	ProjectVersion=$(version) \
-	ProjectStage=dev \
-	GoogleAPIKey=$(GOOGLE_API_KEY)
-
-cfn_outputs=$(shell aws cloudformation describe-stacks --stack-name $(stack_name) | jq -r '.Stacks[0].Outputs[]|.OutputKey+"="+.OutputValue')
+bucket=$(shell cat out/cfn.outputs.json | jq -r '.WebsiteBucket')
 
 init: cfn-init
-install: cfn-package cfn-deploy web-publish
-destroy: cfn-destroy
-show-events: cfn-events
+build: build-web
+deploy: deploy-sls deploy-web
+clean: clean-sls clean-web
 
 help:
 	@echo "Available Targets"
-	@echo "init:     Init the AWS environment"
-	@echo "install:  Deploy/update the CloudFormation stack, build and deploy static assets"
-	@echo "destroy:  Destroy the CloudFormation stack and associated resources"
-
-# TODO:
-# - install node_modules for each lambda before cfn-package
-# - build static website (sub-make?)
-# - publish web assets into s3 bucket
+	@echo "deploy:   Deploy/update the Serverless stack and static assets"
+	@echo "destroy:  Destroy the stack and associated resources"
 
 debug:
 	@echo "Project name: $(PROJECT_NAME)"
@@ -38,48 +23,38 @@ debug:
 	@echo "Code bucket: $(code_bucket_name)"
 
 checkenv:
-	@test -n "$(PROJECT_NAME)" || (echo "Missing PROJECT_NAME"; exit 1)
-	@test -n "$(GOOGLE_API_KEY)" || (echo "Missing GOOGLE_API_KEY"; exit 1)
-	@test -n "$(FBAPPID)" || (echo "Missing FBAPPID"; exit 1)
-	@which jq || (echo "jq is required"; exit 1)
-	@which aws || (echo "aws cli is required"; exit 1)
+	@# test -n "$(PROJECT_NAME)" || (echo "Missing PROJECT_NAME"; exit 1)
+	@# test -n "$(GOOGLE_API_KEY)" || (echo "Missing GOOGLE_API_KEY"; exit 1)
+	@test -n "$(FB_APP_ID)" || (echo "Missing FBAPPID"; exit 1)
+	@which npm > /dev/null || (echo "npm is required"; exit 1)
+	@which aws > /dev/null || (echo "aws cli is required"; exit 1)
+	@which jq > /dev/null || (echo "jq is required"; exit 1)
 
-cfn-init:
-	aws s3 mb s3://$(code_bucket_name)
+node_modules:
+	npm install
 
-cfn-package: checkenv
-	@which yarn || (echo "yarn is required"; exit 1)
-	mkdir -p out/
-	@for dir in `find lambda -mindepth 1 -maxdepth 1 -type d`;do yarn --cwd $$dir install; done
-	aws cloudformation package \
-		--template-file cfn/stack.json \
-		--s3-bucket $(code_bucket_name) \
-		--use-json \
-		--output-template-file \
-		out/stack.deploy.json
+deploy-sls: out/cfn.outputs.json
 
-cfn-deploy: checkenv
-	aws cloudformation deploy \
-		--stack-name $(stack_name) \
-		--template-file out/stack.deploy.json \
-		--capabilities CAPABILITY_IAM \
-		--parameter-overrides $(cfn_params)
+out/cfn.outputs.json: node_modules
+	$(sls) deploy --stage=dev
 
-cfn-destroy: checkenv
-	aws cloudformation delete-stack --stack-name $(stack_name)
+build-web: web/dist
 
-cfn-events: checkenv
-	aws cloudformation describe-stack-events --stack-name $(stack_name)
+web/dist: node_modules
+	mkdir -p web/dist
+	cp -r web/assets web/dist/
+	cp web/favicon.ico web/error.html web/dist/
+	$(hbs) --data ./out/cfn.outputs.json ./web/index.html -o web/dist/
 
-cfn-outputs: checkenv
-	@for out in $(cfn_outputs); do echo $$out; done
+deploy-web: checkenv out/cfn.outputs.json web/dist
+	aws s3 sync --delete web/dist/ s3://$(bucket)/
 
-web-build: checkenv
-	@$(MAKE) -C web/ $(cfn_outputs) build
+clean-sls:
+	rm -rf out/cfn.outputs.json
 
-web-publish: checkenv
-	@$(MAKE) -C web/ $(cfn_outputs) publish
+clean-web:
+	rm -rf web/dist
 
-caddy: web-build
-	@which caddy || (echo "caddy is required"; exit 1)
-	caddy
+# caddy: web-build
+# 	@which caddy || (echo "caddy is required"; exit 1)
+# 	caddy

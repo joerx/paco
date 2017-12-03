@@ -55,19 +55,12 @@
     <div id="fb-root"></div>
 
     <script>
-      // window.appSettings = {
-      //   fbAppId: '808510826174',
-      //   apiUrl: 'https://r50lrn6iv2.execute-api.ap-southeast-1.amazonaws.com',
-      //   s3bucketName: 'pollinator-uploads',
-      //   s3Region: 'ap-southeast-1',
-      //   uploadRoleArn: 'arn:aws:iam::808510826174:role/PollinatorFBUploadRole'
-      // }
       window.appSettings = {
-        fbAppId: '${FbAppId}',
-        apiUrl: '${ApiUrl}',
-        s3bucketName: '${BucketName}',
-        s3Region: '${Region}',
-        uploadRoleArn: '${AssumeRoleArn}'
+        fbAppId: '{{FbAppId}}',
+        apiUrl: '{{ServiceEndpoint}}',
+        s3bucketName: '{{UploadBucket}}',
+        s3Region: '{{Region}}',
+        uploadRoleArn: '{{RoleArn}}'
       }
     </script>
 

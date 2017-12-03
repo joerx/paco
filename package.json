@@ -1,0 +1,31 @@
+{
+  "name": "paco",
+  "version": "1.0.0",
+  "description": "Upload an image containing text, have the text extracted and played back to you. Serverless architecture consisting mostly of Lambda, DynamoDB, 3rd party services and spaghetti code.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joerx/paco.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/joerx/paco/issues"
+  },
+  "homepage": "https://github.com/joerx/paco#readme",
+  "dependencies": {
+    "colors": "^1.1.2",
+    "install": "^0.10.2",
+    "npm": "^5.5.1",
+    "serverless-stack-output": "^0.2.3"
+  },
+  "devDependencies": {
+    "hbs-cli": "^1.1.1",
+    "jq.node": "^2.0.0",
+    "serverless": "^1.24.1"
+  }
+}
