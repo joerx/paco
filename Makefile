@@ -38,9 +38,12 @@ checkenv:
 node_modules:
 	npm install
 
+lambda/node_modules:
+	cd lambda && npm install --production
+
 deploy-sls: out/cfn.outputs.json
 
-out/cfn.outputs.json: node_modules
+out/cfn.outputs.json: node_modules lambda/node_modules
 	$(sls) deploy --stage=dev
 
 build-web: web/dist
@@ -55,6 +58,7 @@ deploy-web: checkenv out/cfn.outputs.json web/dist
 	aws s3 sync --delete web/dist/ s3://$(bucket)/
 
 clean-sls:
+	rm -rf .serverless
 	rm -rf out/cfn.outputs.json
 
 clean-web:

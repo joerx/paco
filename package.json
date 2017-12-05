@@ -18,7 +18,6 @@
   },
   "homepage": "https://github.com/joerx/paco#readme",
   "dependencies": {
-    "uniqid": "^4.1.1"
   },
   "devDependencies": {
     "hbs-cli": "^1.1.1",

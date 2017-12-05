@@ -1,17 +1,15 @@
 service: paco
+package:
+  exclude:
+    - ./**
+  include:
+    - lambda/**
 provider:
   name: aws
   runtime: nodejs6.10
   stage: dev
   region: ap-southeast-1
   variableSyntax: "{{([ ~:a-zA-Z0-9._\\'\",\\-\\/\\(\\)]+?)}}"
-exclude:
-  - Caddyfile
-  - Makefile
-  - scripts
-  - cfn
-  - samples
-  - web
 plugins:
   - serverless-stack-output
 custom:
@@ -39,6 +37,7 @@ functions:
     environment:
       TABLE_NAME: {Ref: 'JobTable'}
       BUCKET_NAME: {Ref: 'UploadBucket'}
+      TOPIC_ARN: {Ref: 'JobStatusTopic'}
       TEXT_DETECTION_FN_NAME: {Ref: 'DetectTextLambdaFunction'}
     memorySize: 128
     timeout: 15
@@ -69,6 +68,14 @@ functions:
     memorySize: 128
     timeout: 300
     role: {Fn::GetAtt: ['TextToSpeechRole', 'Arn']}
+  # JobStatusHandler - handles updates to job status
+  JobStatusHandler:
+    handler: lambda/JobStatusHandler/index.handler
+    environment:
+      TABLE_NAME: {Ref: 'JobTable'}
+    memorySize: 128
+    timeout: 15
+    role: {Fn::GetAtt: ['JobStatusHandlerRole', 'Arn']}
 resources:
   Resources:
     # -- IAM Policy Resources --
@@ -178,8 +185,6 @@ resources:
               Effect: Allow
               Principal: '*'
         Bucket: {Ref: WebsiteBucket}
-    # InvokeCreateJobPermission - permission to invoke CreateJob for API Gateway (not required?)
-    # InvokeGetJobsPermission - permission to invoke GetJobs for API Gateway (not required?)
     # InvokeTextToSpeechPolicy - permission to invoke TextToSpeech
     InvokeTextToSpeechPolicy:
       Type: 'AWS::IAM::ManagedPolicy'
@@ -218,6 +223,20 @@ resources:
                 - {'Fn::GetAtt': ['JobTable', 'Arn']}
               Effect: Allow
               Sid: S1
+    # JobStatusTopicPolicy - permission to publish and subscribe to job status topic
+    JobStatusTopicPolicy:
+      Type: 'AWS::IAM::ManagedPolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action:
+                - 'sns:Publish'
+                - 'sns:Subscribe'
+              Resource:
+                - {Ref: 'JobStatusTopic'}
+              Effect: Allow
+              Sid: S1
     # --
     # IAM Roles composed of those policies (avoid inline policy statement)
     # BucketFbIdentityRole - role assumed by FB users via Web Identity federation
@@ -244,6 +263,7 @@ resources:
           - {Ref: LogStreamPolicy}
           - {Ref: JobTablePolicy}
           - {Ref: InvokeDetectTextPolicy}
+          - {Ref: JobStatusTopicPolicy}
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -275,6 +295,20 @@ resources:
           - {Ref: LogStreamPolicy}
           - {Ref: JobTablePolicy}
           - {Ref: BucketGetObjectPolicy}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Action: 'sts:AssumeRole'
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+    # JobStatusHandlerRole - execution role for JobStatusHandler
+    JobStatusHandlerRole:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        ManagedPolicyArns:
+          - {Ref: LogStreamPolicy}
+          - {Ref: JobTablePolicy}
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:
@@ -351,6 +385,18 @@ resources:
         Tags:
           - Key: ProjectName
             Value: PacoS
+    # SNS topic to send job status notifications
+    JobStatusTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: '{{self:service}}-{{opt:stage}}-job-status'
+    # Subscribe to topic here since SLS can't deal with existing ARNs and fucks up topic naming
+    JobStatusTopicSubscription:
+      Type: 'AWS::SNS::Subscription'
+      Properties:
+        Protocol: lambda
+        Endpoint: {Fn::GetAtt: ['JobStatusHandlerLambdaFunction', 'Arn']}
+        TopicArn: {Ref: 'JobStatusTopic'}
     # Resource record to point to website
     WebsiteDNSRecord:
       Type: AWS::Route53::RecordSet
