@@ -3,6 +3,7 @@
 const AWS = require('aws-sdk');
 const uniqid = require('uniqid');
 const assert = require('assert');
+const mkResponse = require('../lib/mkresponse');
 
 const tableName = process.env.TABLE_NAME;
 const bucketName = process.env.BUCKET_NAME;
@@ -61,18 +62,6 @@ exports.handler = (request, context, cb) => {
             }
         });
     });
-}
-
-
-const mkResponse = (statusCode, data) => {
-  return {
-      statusCode,
-      body: JSON.stringify(data)+'\n',
-      headers: {
-          'Content-type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-      },
-  }
 }
 
 const invokeTextDetection = (event, cb) => {

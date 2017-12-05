@@ -2,17 +2,7 @@
 
 const AWS = require('aws-sdk');
 const assert = require('assert');
-
-const mkResponse = (statusCode, body) => {
-  return {
-    statusCode,
-    body: JSON.stringify(body)+'\n',
-    headers: {
-      'Content-type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
-    },
-  }
-};
+const mkResponse = require('../lib/mkresponse');
 
 const validateParams = (params) => {
   if (!params) {
