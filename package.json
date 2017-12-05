@@ -18,14 +18,13 @@
   },
   "homepage": "https://github.com/joerx/paco#readme",
   "dependencies": {
-    "colors": "^1.1.2",
-    "install": "^0.10.2",
-    "npm": "^5.5.1",
-    "serverless-stack-output": "^0.2.3"
+    "uniqid": "^4.1.1"
   },
   "devDependencies": {
     "hbs-cli": "^1.1.1",
     "jq.node": "^2.0.0",
-    "serverless": "^1.24.1"
+    "serverless": "^1.24.1",
+    "colors": "^1.1.2",
+    "serverless-stack-output": "^0.2.3"
   }
 }
