@@ -2,7 +2,7 @@
 
 const AWS = require('aws-sdk');
 const assert = require('assert');
-const mkResponse = require('../lib/mkresponse');
+const {mkResponse} = require('../lib/response');
 
 const validateParams = (params) => {
   if (!params) {
@@ -92,21 +92,21 @@ const GetJobs = exports.handler = (req, context, cb) => {
             return {url, type: output.type}
           }))
     ).then(outputs => {
-      // map transfored outputs with url back into item, return item
+      // map transformed outputs with url back into item, return item
       return Object.assign({}, item, {outputs});
     });
   }
   
   getItemsFromDb(tableName, data.userId)
-  .then(items => {
-    return Promise.all(items.map(mapOutputs));
-  })
-  .then(items => {
-    const response = mkResponse(200, {items: items});
-    cb(null, response);
-  })
-  .catch(error => {
-    console.error(error);
-    cb(mkResponse(500, {error: error.message || error}));
-  });
+    .then(items => {
+      return Promise.all(items.map(mapOutputs));
+    })
+    .then(items => {
+      const response = mkResponse(200, {items: items});
+      cb(null, response);
+    })
+    .catch(error => {
+      console.error(error);
+      cb(mkResponse(500, {error: error.message || error}));
+    });
 }

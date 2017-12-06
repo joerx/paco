@@ -3,20 +3,19 @@
 const AWS = require('aws-sdk');
 const uniqid = require('uniqid');
 const assert = require('assert');
-const mkResponse = require('../lib/mkresponse');
+const {mkResponse} = require('../lib/response');
+const {publishJobStatus} = require('../lib/sns');
 
-const tableName = process.env.TABLE_NAME;
-const bucketName = process.env.BUCKET_NAME;
-const detectorFnName = process.env.TEXT_DETECTION_FN_NAME;
-const detectorFnVersion = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
-const jobStatusTopicName = process.env.TOPIC_ARN;
+const TABLE_NAME = process.env.TABLE_NAME;
+const TEXT_DETECTION_FN_NAME = process.env.TEXT_DETECTION_FN_NAME;
+const TEXT_DETECTION_FN_VERSION = process.env.TEXT_DETECTION_FN_VERSION || '$LATEST';
+const TOPIC_ARN = process.env.TOPIC_ARN;
 
 exports.handler = (request, context, cb) => {
-  
-  assert(bucketName, 'BUCKET_NAME is required');
-  assert(tableName, 'TABLE_NAME is required');
-  assert(jobStatusTopicName, 'TOPIC_ARN is required');
-  assert(detectorFnName, 'TEXT_DETECTION_FN_NAME is required');
+
+  assert(TABLE_NAME, 'TABLE_NAME is required');
+  assert(TOPIC_ARN, 'TOPIC_ARN is required');
+  assert(TEXT_DETECTION_FN_NAME, 'TEXT_DETECTION_FN_NAME is required');
 
   let data = null;
   
@@ -43,7 +42,7 @@ exports.handler = (request, context, cb) => {
   
   // store job in DynamoDB
   storeJob(jobData)
-    .then(_ => publishJobStatus(jobId))
+    .then(_ => publishJobStatus(TOPIC_ARN, jobId, 'CREATED'))
     .then(_ => invokeTextDetection(jobData))
     .then(_ => {
       const responseData = {message: 'Job accepted', jobId};
@@ -60,7 +59,7 @@ const storeJob = (jobData) => {
  
   const dynamoDB = new AWS.DynamoDB.DocumentClient();
   const params = {
-    TableName: tableName,
+    TableName: TABLE_NAME,
     Item: jobData
   }
   
@@ -77,41 +76,18 @@ const storeJob = (jobData) => {
 * @param {*object} event event data to pass to text detection
 */
 const invokeTextDetection = (event) => {
-  console.log('Invoking '+detectorFnName+':'+detectorFnVersion);
+  console.log('Invoking '+TEXT_DETECTION_FN_NAME+':'+TEXT_DETECTION_FN_VERSION);
   
   const lambda = new AWS.Lambda();
   const params = {
-    FunctionName: detectorFnName,
-    Qualifier: detectorFnVersion,
+    FunctionName: TEXT_DETECTION_FN_NAME,
+    Qualifier: TEXT_DETECTION_FN_VERSION,
     InvocationType: 'Event',
     Payload: JSON.stringify(event)
   }
   
   return new Promise((resolve, reject) => {
     lambda.invoke(params, (err, data) => {
-      if (err) reject(err);
-      else resolve(data);
-    });
-  });
-}
-
-/**
-* Publish job created event to SNS topic
-* @param {*string} jobId 
-*/
-const publishJobStatus = (jobId) => {
-  console.log('Publishing job status', jobId);
-
-  const sns = new AWS.SNS();
-
-  const message = {jobId};
-  const params = {
-    Message: JSON.stringify(message),
-    TargetArn: jobStatusTopicName
-  };
-  
-  return new Promise((resolve, reject) => {
-    sns.publish(params, (err, data) => {
       if (err) reject(err);
       else resolve(data);
     });
