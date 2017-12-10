@@ -54,6 +54,7 @@ functions:
     environment:
       TABLE_NAME: {Ref: 'JobTable'}
       BUCKET_NAME: {Ref: 'UploadBucket'}
+      TOPIC_ARN: {Ref: 'JobStatusTopic'}
       TEXT_TO_SPEECH_FN_NAME: {Ref: 'TextToSpeechLambdaFunction'}
       GOOGLE_API_KEY: '{{env:GOOGLE_API_KEY}}'
     memorySize: 128
@@ -280,6 +281,7 @@ resources:
           - {Ref: JobTablePolicy}
           - {Ref: BucketGetObjectPolicy}
           - {Ref: InvokeTextToSpeechPolicy}
+          - {Ref: JobStatusTopicPolicy}
         AssumeRolePolicyDocument:
           Version: '2012-10-17'
           Statement:

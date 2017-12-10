@@ -4,12 +4,12 @@ const AWS = require('aws-sdk');
  * Publish job created event to SNS topic
  * @param {*string} jobId 
  */
-module.exports.publishJobStatus = (topicArn, jobId, status) => {
+module.exports.publishJobStatus = (topicArn, jobId, status, extra={}) => {
   console.log('Publishing job status', jobId);
 
   const sns = new AWS.SNS();
 
-  const message = {jobId, status};
+  const message = {jobId, status, extra};
   const params = {
     Message: JSON.stringify(message),
     TargetArn: topicArn

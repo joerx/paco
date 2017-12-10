@@ -3,6 +3,7 @@ const https = require('https');
 const assert = require('assert');
 const AWS = require('aws-sdk');
 const {updateJobWithText} = require('../lib/store');
+const {publishJobStatus}=  require('../lib/notify');
 
 // event stucture:
 // {
@@ -19,7 +20,10 @@ const {updateJobWithText} = require('../lib/store');
 // }
 const DetectText = exports.handler = (event, context, cb) => {
 
+  validateEnv();
+
   const bucketName = process.env.BUCKET_NAME;
+  const topicArn = process.env.TOPIC_ARN;
   const tableName = process.env.TABLE_NAME;
   const googleApiKey = process.env.GOOGLE_API_KEY;
   const textToSpeechFnName = process.env.TEXT_TO_SPEECH_FN_NAME;
@@ -39,14 +43,18 @@ const DetectText = exports.handler = (event, context, cb) => {
       console.log(text || 'no text detected');
       console.log('Updating job '+jobId);
 
-      return updateJobWithText(process.env.TABLE_NAME, userId, jobId, text);
+      return updateJobWithText(tableName, userId, jobId, text);
     })
     .then(({userId, jobId, text}) => {
       const params = {userId, jobId, text};
       return invokeTextToSpeech({textToSpeechFnName, textToSpeechFnVersion, params});
     })
     .then(({userId, jobId, text}) => {
-      cb(null, {text});
+      const jobStatus = 'TEXT_EXTRACTED';
+      return publishJobStatus(topicArn, jobId, jobStatus, {text});
+    })
+    .then(() => {
+      cb(null);
     })
     .catch(error => {
       console.error(error);
@@ -61,6 +69,7 @@ const validateEnv = () => {
   assert(process.env.GOOGLE_API_KEY, 'GOOGLE_API_KEY is required');
   assert(process.env.TEXT_TO_SPEECH_FN_NAME, 'TEXT_TO_SPEECH_FN_NAME is required');
   assert(process.env.BUCKET_NAME, 'BUCKET_NAME is required');
+  assert(process.env.TOPIC_ARN, 'TOPIC_ARN is required');
 }
 
 

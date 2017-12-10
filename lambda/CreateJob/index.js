@@ -4,7 +4,7 @@ const AWS = require('aws-sdk');
 const uniqid = require('uniqid');
 const assert = require('assert');
 const {mkResponse} = require('../lib/response');
-const {publishJobStatus} = require('../lib/sns');
+const {publishJobStatus} = require('../lib/notify');
 
 const TABLE_NAME = process.env.TABLE_NAME;
 const TEXT_DETECTION_FN_NAME = process.env.TEXT_DETECTION_FN_NAME;
